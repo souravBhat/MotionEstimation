@@ -1,3 +1,3 @@
 #!/bin/bash
 mkdir -p ../bin
-nvcc block.c prediction_frame.c main.c -o ../bin/mes && ../bin/mes
+nvcc block.cu prediction_frame.cu main.cu -o ../bin/mes && ../bin/mes
