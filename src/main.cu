@@ -29,8 +29,9 @@ float* findBestMatchMse(predictionFrame pf, int *referenceFrame, block blk, int 
   // First is the score, 2nd and 3rd element is the vector.
   float* result = (float*) malloc(sizeof(float) * 3);
   result[0] = INFINITY;
-  for(int y = windowTopLeftY; y < windowBottomRightY - blk.height; y++) {
-    for(int x = windowTopLeftX; x < windowBottomRightX - blk.width; x++) {
+
+  for(int y = windowTopLeftY; y <= windowBottomRightY - blk.height + 1; y++) {
+    for(int x = windowTopLeftX; x <= windowBottomRightX - blk.width + 1; x++) {
       int candBlkTopLeftX = x;
       int candBlkTopLeftY = y;
       float candMse = computeMse(referenceFrame, candBlkTopLeftX, candBlkTopLeftY, pf.frame, blk);
@@ -45,14 +46,16 @@ float* findBestMatchMse(predictionFrame pf, int *referenceFrame, block blk, int 
 }
 
 // Returns the score of the best block, given the window size.
-float findBestBlkMse(predictionFrame pf, int *referenceFrame, block *blk, int windowSize) {
+float findBestBlkMse(predictionFrame pf, int *referenceFrame, block *blk, int extraSpan) {
   // Get bounds of search window.
-  int blkCenterX = (blk->top_left_x + blk->width + 1)/2;
-  int blkCenterY = (blk->top_left_y + blk->height + 1)/2;
-  int windowTopLeftX = (blkCenterX - windowSize) < 0 ? 0 : blkCenterX - windowSize;
-  int windowTopLeftY = (blkCenterY - windowSize) < 0 ? 0 : blkCenterY - windowSize;
-  int windowBottomRightX = (blkCenterX + windowSize) >= pf.width ? pf.width - 1 : (blkCenterX + windowSize);
-  int windowBottomRightY = (blkCenterY + windowSize) >= pf.height ? pf.height - 1: (blkCenterY + windowSize);
+  int topLeftX = blk->top_left_x;
+  int topLeftY = blk->top_left_y;
+  int bottomRightX = blk->bottom_right_x;
+  int bottomRightY = blk->bottom_right_y;
+  int windowTopLeftX = (topLeftX - extraSpan) < 0 ? 0 : topLeftX - extraSpan;
+  int windowTopLeftY = (topLeftY - extraSpan) < 0 ? 0 : topLeftY - extraSpan;
+  int windowBottomRightX = (bottomRightX + extraSpan) >= pf.width ? pf.width - 1 : (bottomRightX + extraSpan);
+  int windowBottomRightY = (bottomRightY + extraSpan) >= pf.height ? pf.height - 1: (bottomRightY + extraSpan);
 
   float* match = findBestMatchMse(pf, referenceFrame, *blk, windowTopLeftX, windowTopLeftY, windowBottomRightX, windowBottomRightY);
   populateBlkMotionVector(blk, (int) match[1], (int)match[2]);
@@ -61,28 +64,63 @@ float findBestBlkMse(predictionFrame pf, int *referenceFrame, block *blk, int wi
 }
 
 int main() {
-  block b;
-  createBlk(&b, 1, 1, 2, 2, 3, 4);
-  printf("%s\n", blkStr(b));
+  int nx = 5; int ny = 3;
+  int blkDim = 2;
+  int extraSpan = 1;
 
-  int nx = 3; int ny = 5;
-  int *frame =(int*) malloc(sizeof(int) * nx * ny);
+  int frameA[ny][nx];
+  int frameB[ny][nx];
+  int count = 1;
+
+  for(int y = 0; y < ny; y++) {
+      for(int x = 0; x < nx; x++) {
+        frameA[y][x] = 0;
+        frameB[y][x] = 0;
+      }
+  }
+
+  for(int y = 1; y < ny; y++) {
+    for(int x = 1; x < nx; x++) {
+      frameA[y - 1][x - 1] = count;
+      frameB[y][x] = count++;
+    }
+  }
+
+  // Print out frame A and B. We to get motion vectors from frameA -> frameB.
+  printf("FrameA:\n");
+  for(int y = 0; y < ny; y++) {
+      for(int x = 0; x < nx; x++) {
+        printf("%d ", frameA[y][x]);
+      }
+      printf("\n");
+  }
+
+  printf("\nFrameB:\n");
+  for(int y = 0; y < ny; y++) {
+      for(int x = 0; x < nx; x++) {
+        printf("%d ", frameB[y][x]);
+      }
+      printf("\n");
+  }
+
+  int *frameAPtr = (int*) malloc(sizeof(int) * nx * ny);
+  int *frameBPtr = (int*) malloc(sizeof(int) * nx * ny);
   for(int i = 0; i < ny; i++) {
     for(int j = 0; j < nx; j++) {
-      frame[i *  nx + j] = 1;
+      frameAPtr[i *  nx + j] = frameA[i][j];
+      frameBPtr[i * nx + j] = frameB[i][j];
     }
   }
 
   predictionFrame p;
-  createPredictionFrame(&p, frame, 5, 3, 2);
-  printf("%s\n", predictionFrameStr(p));
-  int windowSize = 3;
+  createPredictionFrame(&p, frameBPtr, nx, ny, blkDim);
+  printf("\n%s\n", predictionFrameStr(p));
   float sum = 0.0;
   for(int i = 0; i < p.num_blks; i++) {
-    float val = findBestBlkMse(p, frame, &p.blks[i], windowSize);
+    float val = findBestBlkMse(p, frameAPtr, &p.blks[i], extraSpan);
     int* mv = p.blks[i].motion_vector;
     printf("Blk %s, score: %.3f, mv: [%d, %d]\n", blkStr(p.blks[i]), val, mv[0], mv[1]);
     sum += val;
   }
-  printf("%.3f\n", sum);
+  printf("Score: %.3f\n", sum);
 }
