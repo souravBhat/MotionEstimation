@@ -16,7 +16,7 @@ double getTimeStamp() {
 }
 
 // Given candidate block and current frame block, compute mse.
-__global__ float computeMse(int *referenceFrame, int candBlkTopLeftX, int candBlkTopLeftY, int *predictionFrame, block blk){
+__device__ float computeMse(int *referenceFrame, int candBlkTopLeftX, int candBlkTopLeftY, int *predictionFrame, block blk){
     float sum = 0;
     for(int offsetY = 0; offsetY < blk.height; offsetY++) {
         for(int offsetX = 0; offsetX <= blk.width; offsetX++) {
@@ -34,7 +34,7 @@ __global__ float computeMse(int *referenceFrame, int candBlkTopLeftX, int candBl
 //device-side matrix addition
 
 __global__ void f_findBestMatchBlock(int *currentframe, int *referenceframe,int extraSpan, block *block_list ){
-    printf("%d\n",block_list[0].height);
+    //printf("%d\n",block_list[0].height);
     int blockID = blockIdx.y * ( 3840 / block_list[0].width) + blockIdx.x;
     block currentBlk = block_list[blockID];
     int windowTopLeftX = currentBlk.top_left_x - extraSpan + threadIdx.x;
@@ -44,6 +44,7 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceframe,int 
     __shared__ float result[1024];
     if (windowTopLeftX >= 0 && windowBottomRightX <= 3840 && windowTopLeftY >= 0 && windowBottomRightY <= 2160){
         result[threadIdx.x + threadIdx.y*blockDim.x] = computeMse(referenceframe, windowTopLeftX, windowTopLeftY, currentframe, currentBlk);
+        printf("%lf\n",result[threadIdx.x + threadIdx.y*blockDim.x]);
     }
 }
 
@@ -146,8 +147,8 @@ int main(int argc, char* argv[]) {
 
     // invoke Kernel
     dim3 block(extraSpan, extraSpan); // you will want to configure this
-    //dim3 grid((3840 + block.x - 1) / block.x, (2160 + block.y - 1) / block.y);
-    dim3 grid(1, 1);
+    dim3 grid((3840 + block.x - 1) / block.x, (2160 + block.y - 1) / block.y);
+    //dim3 grid(1, 1);
     f_findBestMatchBlock<<<grid, block>>>(d_currentDFrame, d_referenceFrame, extraSpan,d_block_list);
     cudaDeviceSynchronize();
 
