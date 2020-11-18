@@ -2,6 +2,7 @@
 #include <math.h>
 #include "block.h"
 #include "prediction_frame.h"
+#include "utils.h"
 
 void populateBlkMotionVector(block *blk, int dx, int dy) {
   blk->motion_vector = (int*) malloc(sizeof(int) * 2);
@@ -63,9 +64,37 @@ float findBestBlkMse(predictionFrame pf, int *referenceFrame, block *blk, int ex
   return match[0];
 }
 
+int* motionCompensatedFrame(predictionFrame pf) {
+  int* motionCompFrame = (int*) malloc(sizeof(int) * pf.width * pf.height);
+  for(int i = 0; i < pf.num_blks; i++) {
+    block blk = pf.blks[i];
+    if(!blk.is_best_match_found) continue;
+    int * mv = blk.motion_vector;
+
+    // Populate the compensated frame.
+    for(int x = blk.top_left_x; x <= blk.bottom_right_x; x++) {
+      for(int y = blk.top_left_y; y <= blk.bottom_right_y; y++) {
+        // Get compensated position.
+        int comp_x = x - mv[0];
+        int comp_y = y - mv[1];
+        // Populate array if within bounds.
+        if(comp_x >= 0 && comp_y >= 0) {
+          #ifdef DEBUG
+          #if (DEBUG > 0)
+          printf("(%d, %d) moved to (%d, %d)\n", x, y, comp_x, comp_y);
+          #endif
+          #endif
+          motionCompFrame[comp_y * pf.width + comp_x] = pf.frame[y * pf.width + x];
+        }
+      }
+    }
+  }
+  return motionCompFrame;
+}
+
 int main() {
-  int nx = 5; int ny = 3;
-  int blkDim = 2;
+  int nx = 10; int ny = 5;
+  int blkDim = 1;
   int extraSpan = 1;
 
   int frameA[ny][nx];
@@ -90,7 +119,7 @@ int main() {
   printf("FrameA:\n");
   for(int y = 0; y < ny; y++) {
       for(int x = 0; x < nx; x++) {
-        printf("%d ", frameA[y][x]);
+        printf("%d\t", frameA[y][x]);
       }
       printf("\n");
   }
@@ -98,7 +127,7 @@ int main() {
   printf("\nFrameB:\n");
   for(int y = 0; y < ny; y++) {
       for(int x = 0; x < nx; x++) {
-        printf("%d ", frameB[y][x]);
+        printf("%d\t", frameB[y][x]);
       }
       printf("\n");
   }
@@ -119,8 +148,17 @@ int main() {
   for(int i = 0; i < p.num_blks; i++) {
     float val = findBestBlkMse(p, frameAPtr, &p.blks[i], extraSpan);
     int* mv = p.blks[i].motion_vector;
-    printf("Blk %s, score: %.3f, mv: [%d, %d]\n", blkStr(p.blks[i]), val, mv[0], mv[1]);
     sum += val;
+
+    #ifdef DEBUG
+    #if (DEBUG > 0)
+    printf("Blk %s, score: %.3f, mv: [%d, %d]\n", blkStr(p.blks[i]), val, mv[0], mv[1]);
+    #endif
+    #endif
   }
   printf("Score: %.3f\n", sum);
+
+  int* motionCompFrame = motionCompensatedFrame(p);
+  printf("\nFrame motionComp supposed to look like frameA:\n");
+  printArrFrame(motionCompFrame, nx, ny);
 }
