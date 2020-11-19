@@ -48,10 +48,12 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceframe,int 
 
     /* shared memeory for saving the computed MSE result for each candidate block */
     __shared__ float result[ 1024 ];
+    __shared__ int threadID[ 1024 ];
+    threadID[ threadIdx.x + blockDim.x * threadIdx.y ] =threadIdx.x + blockDim.x * threadIdx.y;
     result[threadIdx.x + threadIdx.y*blockDim.x] =9999;
     if (windowTopLeftX >= 0 && windowBottomRightX <= 3840 && windowTopLeftY >= 0 && windowBottomRightY <= 2160){
         result[threadIdx.x + threadIdx.y*blockDim.x] = computeMse(referenceframe, windowTopLeftX, windowTopLeftY, currentframe, currentBlk);
-        //printf("computed %lf\n",result[threadIdx.x + threadIdx.y*blockDim.x]);
+        printf("ID = %d, value = %lf\n",threadID[ threadIdx.x + blockDim.x * threadIdx.y ], result[threadIdx.x + threadIdx.y*blockDim.x]);
     }
 
     __syncthreads();
@@ -61,7 +63,12 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceframe,int 
     while(i != 0){
         if(threadIdx.x + threadIdx.y*blockDim.x < i){
             //printf("comparing %lf to %lf \n",result[threadIdx.x + threadIdx.y*blockDim.x],result[threadIdx.x + threadIdx.y*blockDim.x + i]);
-            result[threadIdx.x + threadIdx.y*blockDim.x] = fminf(result[threadIdx.x + threadIdx.y*blockDim.x], result[threadIdx.x + threadIdx.y*blockDim.x + i]);
+            if (result[threadIdx.x + threadIdx.y*blockDim.x] > result[threadIdx.x + threadIdx.y*blockDim.x + i]){
+                result[threadIdx.x + threadIdx.y*blockDim.x] = result[threadIdx.x + threadIdx.y*blockDim.x + i];
+                threadID[threadIdx.x + threadIdx.y*blockDim.x] = threadID[threadIdx.x + threadIdx.y*blockDim.x + i];
+            }
+
+
         }
         __syncthreads();
         i /= 2;
@@ -69,7 +76,12 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceframe,int 
 
     /* print out the best one result*/
     if(threadIdx.x + threadIdx.y*blockDim.x == 0){
-        printf("%lf\n",result[0]);
+        printf("smallest MSE = %lf with thread ID = %d\n",result[0], threadID[0]);
+    }
+    __syncthreads();
+    if(threadIdx.x + threadIdx.y*blockDim.x == threadID[0]){
+        printf("the win block has top left x = %d\n",block_list[threadID[0]].top_left_x);
+        printf("the win block has top left y = %d\n",block_list[threadID[0]].top_left_y);
     }
 
 }
