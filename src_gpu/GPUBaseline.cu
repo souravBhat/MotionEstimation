@@ -35,17 +35,43 @@ __device__ float computeMse(int *referenceFrame, int candBlkTopLeftX, int candBl
 
 __global__ void f_findBestMatchBlock(int *currentframe, int *referenceframe,int extraSpan, block *block_list ){
     //printf("%d\n",block_list[0].height);
+    /* pick the block by using GPU block ID*/
     int blockID = blockIdx.y * ( 3840 / block_list[0].width) + blockIdx.x;
     block currentBlk = block_list[blockID];
+
+    /* computing the candidate block by using thread ID*/
     int windowTopLeftX = currentBlk.top_left_x - extraSpan + threadIdx.x;
     int windowTopLeftY = currentBlk.top_left_y - extraSpan + threadIdx.y;
     int windowBottomRightX = windowTopLeftX + currentBlk.width - 1;
     int windowBottomRightY = windowTopLeftY + currentBlk.width - 1;
-    __shared__ float result[1024];
+    int nuBlocksWithinGPUGrid = (extraSpan * 2) * (extraSpan * 2);
+
+    /* shared memeory for saving the computed MSE result for each candidate block */
+    __shared__ float result[ 1024 ];
+    result[threadIdx.x + threadIdx.y*blockDim.x] =9999;
     if (windowTopLeftX >= 0 && windowBottomRightX <= 3840 && windowTopLeftY >= 0 && windowBottomRightY <= 2160){
         result[threadIdx.x + threadIdx.y*blockDim.x] = computeMse(referenceframe, windowTopLeftX, windowTopLeftY, currentframe, currentBlk);
-        printf("%lf\n",result[threadIdx.x + threadIdx.y*blockDim.x]);
+        //printf("computed %lf\n",result[threadIdx.x + threadIdx.y*blockDim.x]);
     }
+
+    __syncthreads();
+
+    /* calculating the minimum value in result array */
+    unsigned int i = nuBlocksWithinGPUGrid/2;
+    while(i != 0){
+        if(threadIdx.x + threadIdx.y*blockDim.x < i){
+            //printf("comparing %lf to %lf \n",result[threadIdx.x + threadIdx.y*blockDim.x],result[threadIdx.x + threadIdx.y*blockDim.x + i]);
+            result[threadIdx.x + threadIdx.y*blockDim.x] = fminf(result[threadIdx.x + threadIdx.y*blockDim.x], result[threadIdx.x + threadIdx.y*blockDim.x + i]);
+        }
+        __syncthreads();
+        i /= 2;
+    }
+
+    /* print out the best one result*/
+    if(threadIdx.x + threadIdx.y*blockDim.x == 0){
+        printf("%lf\n",result[0]);
+    }
+
 }
 
 float SumDataA(float* A, int n){
@@ -146,9 +172,9 @@ int main(int argc, char* argv[]) {
     cudaMemcpy(d_block_list, h_block_list, p.num_blks * 48, cudaMemcpyHostToDevice);
 
     // invoke Kernel
-    dim3 block(extraSpan, extraSpan); // you will want to configure this
-    dim3 grid((3840 + block.x - 1) / block.x, (2160 + block.y - 1) / block.y);
-    //dim3 grid(1, 1);
+    dim3 block(extraSpan*2, 2*extraSpan); // you will want to configure this
+    //dim3 grid((nx + block.x - 1) / block.x, (ny + block.y - 1) / block.y);
+    dim3 grid(1, 1);
     f_findBestMatchBlock<<<grid, block>>>(d_currentDFrame, d_referenceFrame, extraSpan,d_block_list);
     cudaDeviceSynchronize();
 
