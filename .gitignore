@@ -6,3 +6,6 @@
 *.fatbin
 .idea
 bin
+.DS_Store
+*.un~
+*~
