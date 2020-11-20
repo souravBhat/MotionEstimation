@@ -1,3 +1,4 @@
 #!/bin/bash
 mkdir -p ../bin
-nvcc block.cu prediction_frame.cu main.cu -o ../bin/mes && ../bin/mes
+# Run on cpu.
+gcc block.c prediction_frame.c main.c utils.c -o ../bin/mes && ../bin/mes ../frames/YF1.yuv ../frames/YF2.yuv
