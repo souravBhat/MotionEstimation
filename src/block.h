@@ -14,7 +14,8 @@ typedef struct block {
   int width;
   int height;
   int is_best_match_found;
-  int motion_vector[2];
+  int motion_vectorX;
+  int motion_vectorY;
 } block;
 
 void createBlk(block *blk, int idxX, int idxY, int topleftX, int topLeftY, int bottomRightX, int bottomRightY);
