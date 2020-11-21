@@ -89,3 +89,30 @@ void frameDiff(int* diffFrame, int* frameA, int* frameB, int numElems) {
     diffFrame[i] = diff;
   }
 }
+
+int* motionCompensatedFrame(predictionFrame pf, int* ref_frame) {
+  int* motionCompFrame = (int*) malloc(sizeof(int) * pf.width * pf.height);
+  for(int i = 0; i < pf.num_blks; i++) {
+      block blk = pf.blks[i];
+      if(!blk.is_best_match_found) continue;
+
+      // Populate the compensated frame.
+      for(int x = blk.top_left_x; x <= blk.bottom_right_x; x++) {
+        for(int y = blk.top_left_y; y <= blk.bottom_right_y; y++) {
+          // Get compensated position.
+          int comp_ref_x = x - blk.motion_vectorX;
+          int comp_ref_y = y - blk.motion_vectorY;
+          // Populate array if within bounds.
+          if(comp_ref_x >= 0 && comp_ref_y >= 0 && comp_ref_x < pf.width && comp_ref_y < pf.height) {
+            #ifdef DEBUG
+            #if (DEBUG > 0)
+            printf("(%d, %d) moved to (%d, %d)\n", x, y, comp_ref_x, comp_ref_y);
+            #endif
+            #endif
+            motionCompFrame[y * pf.width + x] = ref_frame[comp_ref_y * pf.width + comp_ref_x];
+          }
+        }
+      }
+    }
+    return motionCompFrame;
+}

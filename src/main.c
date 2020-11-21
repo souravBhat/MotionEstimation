@@ -5,8 +5,8 @@
 #include "utils.h"
 
 void populateBlkMotionVector(block *blk, int dx, int dy) {
-  blk->motion_vector[0] = dx;
-  blk->motion_vector[1] = dy;
+  blk->motion_vectorX = dx;
+  blk->motion_vectorY = dy;
   blk->is_best_match_found = 1;
 }
 
@@ -63,43 +63,13 @@ float findBestBlkMse(predictionFrame pf, int *referenceFrame, block *blk, int ex
   return match[0];
 }
 
-int* motionCompensatedFrame(predictionFrame pf) {
-  int* motionCompFrame = (int*) malloc(sizeof(int) * pf.width * pf.height);
-  // First copy the frame.
-  for(int i = 0; i < pf.width * pf.height; i++) motionCompFrame[i] = pf.frame[i];
-
-  for(int i = 0; i < pf.num_blks; i++) {
-    block blk = pf.blks[i];
-    if(!blk.is_best_match_found) continue;
-
-    // Populate the compensated frame.
-    for(int x = blk.top_left_x; x <= blk.bottom_right_x; x++) {
-      for(int y = blk.top_left_y; y <= blk.bottom_right_y; y++) {
-        // Get compensated position.
-        int comp_x = x - blk.motion_vector[0];
-        int comp_y = y - blk.motion_vector[1];
-        // Populate array if within bounds.
-        if(comp_x >= 0 && comp_y >= 0 && comp_x < pf.width && comp_y < pf.height) {
-          #ifdef DEBUG
-          #if (DEBUG > 0)
-          printf("(%d, %d) moved to (%d, %d)\n", x, y, comp_x, comp_y);
-          #endif
-          #endif
-          motionCompFrame[comp_y * pf.width + comp_x] = pf.frame[y * pf.width + x];
-        }
-      }
-    }
-  }
-  return motionCompFrame;
-}
-
 int main(int argc, char* argv[]) {
   if (argc != 3) {
       printf("Error: wrong number of argument\n");
       exit(0);
   }
   int blkDim = 16;
-  int extraSpan = 7;
+  int extraSpan = 15;
   int frameWidth =  3840;
   int frameHeight = 2160;
   int numElems = frameWidth * frameHeight;
@@ -119,25 +89,24 @@ int main(int argc, char* argv[]) {
   createPredictionFrame(&p, currentFrame, frameWidth, frameHeight, blkDim);
   for(int i = 0; i < p.num_blks; i++) {
     findBestBlkMse(p, refFrame, &p.blks[i], extraSpan);
-    int* mv = p.blks[i].motion_vector;
 
     #ifdef DEBUG
     #if (DEBUG > 0)
-    printf("Blk %s, score: %.3f, mv: [%d, %d]\n", blkStr(p.blks[i]), val, mv[0], mv[1]);
+    printf("Blk %s, score: %.3f, mv: [%d, %d]\n", blkStr(p.blks[i]), val, p.blks[i].motion_vectorX, p.blks[i].motion_vectorY);
     #endif
     #endif
   }
 
-  int* motionCompFrame = motionCompensatedFrame(p);
+  int* motionCompFrame = motionCompensatedFrame(p, refFrame);
   int* motionCompDiff = (int*) malloc(sizeof(int) * numElems);
   int* originalDiff = (int*) malloc(sizeof(int) * numElems);
-  frameDiff(motionCompDiff, motionCompFrame, refFrame, numElems);
-  frameDiff(originalDiff, currentFrame, refFrame, numElems);
+  frameDiff(motionCompDiff, motionCompFrame, currentFrame, numElems);
+  frameDiff(originalDiff, refFrame, currentFrame, numElems);
 
   float motionCompScore = 0.0;
   float originalScore = 0.0;
   for(int i =0; i < numElems; i++) {
-    motionCompScore += (motionCompFrame[i] - refFrame[i]) * (motionCompFrame[i] - refFrame[i]);
+    motionCompScore += (motionCompFrame[i] - currentFrame[i]) * (motionCompFrame[i] - currentFrame[i]);
     originalScore += (currentFrame[i] - refFrame[i]) * (currentFrame[i] - refFrame[i]);
   }
   printf("Original Score: %.4f, Compensated Score: %.4f\n", originalScore/numElems, motionCompScore/numElems);
@@ -146,6 +115,6 @@ int main(int argc, char* argv[]) {
   yuvWriteFrame("../bin/original_diff.yuv", originalDiff, numElems);
 
   for(int i = 0; i < 10; i++) {
-    printf("Blk %s, mv: [%d, %d]\n", blkStr(p.blks[i]), p.blks[i].motion_vector[0], p.blks[i].motion_vector[1]);
+    printf("Blk %s, mv: [%d, %d]\n", blkStr(p.blks[i]), p.blks[i].motion_vectorX, p.blks[i].motion_vectorY);
   }
 }
