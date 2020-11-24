@@ -1,0 +1,13 @@
+[
+  Current Frame: ../../frames/JockeyYF1.yuv
+  Reference Frame: ../../frames/JockeyYF2.yuv
+  Output Dir: ../../results/cpu/jockey
+  BlkDim: 16
+  ExtraSpan: 7
+  FrameWidth: 3840
+  FrameHeight: 2160
+]
+Original Score: 388.2133, Compensated Score: 192.0840
+writing to file ../../results/cpu/jockey/motion_comp_16_7.yuv.
+writing to file ../../results/cpu/jockey/motion_comp_diff_16_7.yuv.
+writing to file ../../results/cpu/jockey/original_diff.yuv.
