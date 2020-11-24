@@ -1,0 +1,13 @@
+[
+  Current Frame: ../frames/ForemanYF4.yuv
+  Reference Frame: ../frames/ForemanYF1.yuv
+  Output Dir: ../results/cpu/foreman
+  BlkDim: 4
+  ExtraSpan: 7
+  FrameWidth: 352
+  FrameHeight: 288
+]
+Original Score: 384.4514, Compensated Score: 47.7937
+writing to file ../results/cpu/foreman/motion_comp_4_7.yuv.
+writing to file ../results/cpu/foreman/motion_comp_diff_4_7.yuv.
+writing to file ../results/cpu/foreman/original_diff.yuv.

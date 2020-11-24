@@ -9,6 +9,7 @@ void createBlk(block *blk, int idxX, int idxY, int topLeftX, int topLeftY, int w
   blk->height = height;
   blk->bottom_right_x = topLeftX + width - 1;
   blk->bottom_right_y = topLeftY + height - 1;
+  blk->motion_vectorY = -1000;
 }
 
 char* blkStr(block blk) {

@@ -96,20 +96,26 @@ int* motionCompensatedFrame(predictionFrame pf, int* ref_frame) {
       block blk = pf.blks[i];
       if(!blk.is_best_match_found) continue;
 
+      int currFrameTopLeftX = blk.top_left_x;
+      int currFrameTopLeftY = blk.top_left_y;
+      int compFrameTopLeftX = currFrameTopLeftX + blk.motion_vectorX;
+      int compFrameTopRightY = currFrameTopLeftY + blk.motion_vectorY;
       // Populate the compensated frame.
-      for(int x = blk.top_left_x; x <= blk.bottom_right_x; x++) {
-        for(int y = blk.top_left_y; y <= blk.bottom_right_y; y++) {
+      for(int offsetX = 0;  offsetX < blk.width; offsetX++) {
+        for(int offsetY = 0; offsetY < blk.height; offsetY++) {
           // Get compensated position.
-          int comp_ref_x = x - blk.motion_vectorX;
-          int comp_ref_y = y - blk.motion_vectorY;
+          int currX = currFrameTopLeftX + offsetX;
+          int currY = currFrameTopLeftY + offsetY;
+          int compX = compFrameTopLeftX + offsetX;
+          int compY = compFrameTopRightY + offsetY;
           // Populate array if within bounds.
-          if(comp_ref_x >= 0 && comp_ref_y >= 0 && comp_ref_x < pf.width && comp_ref_y < pf.height) {
+          if(compX >= 0 && compY >= 0 && compX < pf.width && compY < pf.height) {
             #ifdef DEBUG
-            #if (DEBUG > 0)
-            printf("(%d, %d) moved to (%d, %d)\n", x, y, comp_ref_x, comp_ref_y);
+            #if (DEBUG > 1)
+            printf("(%d, %d) moved to (%d, %d)\n", currX, currY, compX, compY);
             #endif
             #endif
-            motionCompFrame[y * pf.width + x] = ref_frame[comp_ref_y * pf.width + comp_ref_x];
+            motionCompFrame[currY * pf.width + currX] = ref_frame[compY * pf.width + compX];
           }
         }
       }
