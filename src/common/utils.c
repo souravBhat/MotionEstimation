@@ -90,8 +90,7 @@ void frameDiff(int* diffFrame, int* frameA, int* frameB, int numElems) {
   }
 }
 
-int* motionCompensatedFrame(predictionFrame pf, int* ref_frame) {
-  int* motionCompFrame = (int*) malloc(sizeof(int) * pf.width * pf.height);
+void motionCompensatedFrame(int* motionCompFrame, predictionFrame pf, int* ref_frame) {
   for(int i = 0; i < pf.num_blks; i++) {
       block blk = pf.blks[i];
       if(!blk.is_best_match_found) continue;
@@ -120,5 +119,4 @@ int* motionCompensatedFrame(predictionFrame pf, int* ref_frame) {
         }
       }
     }
-    return motionCompFrame;
 }

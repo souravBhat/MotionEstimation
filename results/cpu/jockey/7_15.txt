@@ -8,6 +8,5 @@
   FrameHeight: 2160
 ]
 Original Score: 388.2133, Compensated Score: 65.5734
-writing to file ../../results/cpu/jockey/motion_comp_7_15.yuv.
-writing to file ../../results/cpu/jockey/motion_comp_diff_7_15.yuv.
-writing to file ../../results/cpu/jockey/original_diff.yuv.
+Output file dimensions: (3840 x 10800)
+writing to file ../../results/cpu/jockey/output_7_15.yuv.

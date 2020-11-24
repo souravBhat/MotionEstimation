@@ -1,0 +1,12 @@
+[
+  Current Frame: ../../frames/ForemanYF4.yuv
+  Reference Frame: ../../frames/ForemanYF1.yuv
+  Output Dir: ../../results/cpu/foreman
+  BlkDim: 4
+  ExtraSpan: 15
+  FrameWidth: 352
+  FrameHeight: 288
+]
+Original Score: 384.4514, Compensated Score: 17.1327
+Output file dimensions: (352 x 1440)
+writing to file ../../results/cpu/foreman/output_4_15.yuv.

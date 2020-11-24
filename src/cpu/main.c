@@ -96,12 +96,8 @@ int main(int argc, char* argv[]) {
   int bytes = sizeof(int) * numElems;
 
   // File locations for the results.
-  char motionCompFileName[100];
-  char motionCompDiffFileName[100];
-  char originalDiffFileName[100];
-  sprintf(motionCompFileName, "%s/motion_comp_%d_%d.yuv", outputDir, blkDim, extraSpan);
-  sprintf(motionCompDiffFileName, "%s/motion_comp_diff_%d_%d.yuv", outputDir, blkDim, extraSpan);
-  sprintf(originalDiffFileName, "%s/original_diff.yuv", outputDir);
+  char outputFileName[100];
+  sprintf(outputFileName, "%s/output_%d_%d.yuv", outputDir, blkDim, extraSpan);
 
   // Read current and reference frame.
   int * currentFrame = (int*) malloc(bytes);
@@ -129,23 +125,25 @@ int main(int argc, char* argv[]) {
   }
 
   // Generate motion compensated frame and other results.
-  int* motionCompFrame = motionCompensatedFrame(p, refFrame);
-  int* motionCompDiff = (int*) malloc(sizeof(int) * numElems);
-  int* originalDiff = (int*) malloc(sizeof(int) * numElems);
-  frameDiff(motionCompDiff, motionCompFrame, currentFrame, numElems);
-  frameDiff(originalDiff, refFrame, currentFrame, numElems);
+  int* outputFile = (int*) malloc(bytes * 5);
+  memcpy(outputFile, refFrame, bytes);
+  memcpy(&outputFile[numElems], currentFrame, bytes);
+  motionCompensatedFrame(&outputFile[numElems*2], p, refFrame);
+  // Difference between current and reference frames.
+  frameDiff(&outputFile[numElems*3], refFrame, currentFrame, numElems);
+  // Difference between current and motion compensated frames.
+  frameDiff(&outputFile[numElems*4], &outputFile[numElems*2], currentFrame, numElems);
 
   // Compare MSE score with the motion compensated frame.
   float motionCompScore = 0.0;
   float originalScore = 0.0;
   for(int i =0; i < numElems; i++) {
-    motionCompScore += (motionCompFrame[i] - currentFrame[i]) * (motionCompFrame[i] - currentFrame[i]);
+    motionCompScore += (outputFile[numElems*2 + i] - currentFrame[i]) * (outputFile[numElems*2 + i]- currentFrame[i]);
     originalScore += (currentFrame[i] - refFrame[i]) * (currentFrame[i] - refFrame[i]);
   }
   printf("Original Score: %.4f, Compensated Score: %.4f\n", originalScore/numElems, motionCompScore/numElems);
 
   // Output the frames of interest.
-  yuvWriteFrame(motionCompFileName, motionCompFrame, numElems);
-  yuvWriteFrame(motionCompDiffFileName, motionCompDiff, numElems);
-  yuvWriteFrame(originalDiffFileName, originalDiff, numElems);
+  printf("Output file dimensions: (%d x %d)\n", frameWidth, 5*frameHeight);
+  yuvWriteFrame(outputFileName, outputFile, numElems*5);
 }
