@@ -100,40 +100,46 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceframe,int 
 
 int main(int argc, char* argv[]) {
 
-    if (argc != 3) {
-        printf("Error: wrong number of argument\n");
+    if (argc < 4) {
+        printf("Error: wrong number of argument. Usage: <current_frame> <reference_frame> <output_dir> [<blk_dim>] [<extra_span>] [<width>] [<height>]\n");
         exit(0);
     }
-    int nx = 3840;
-    int ny = 2160;
-    int blkDim = 16;
-    int noElems = nx * ny;
+    char * currentFrameStr = argv[1];
+    char * referenceFrameStr = argv[2];
+    char * outputDir = argv[3];
+    int blkDim = argc > 4 ? atoi(argv[4]) : 16;
+    int extraSpan = argc > 5 ? atoi(argv[5]) : 15;
+    int frameWidth =  argc > 6 ? atoi(argv[6]) : 3840;
+    int frameHeight = argc > 7 ? atoi(argv[7]) : 2160;
 
-    int extraSpan = 15;
-    printf("block dimension = %d\n", blkDim);
-    printf("extraSpan  = %d\n", extraSpan);
+    int numElems = frameWidth * frameHeight;
+    int bytes = numElems * sizeof(int);
+
+    // File locations for the results.
+    char outputFileName[100];
+    sprintf(outputFileName, "%s/output_%d_%d.yuv", outputDir, blkDim, extraSpan);
 
     // alloc memeory host-side
-    int *h_referenceFrame, *h_currentDFrame;
-    printf("total bytes = %d\n", noElems * sizeof(int));
+    int *h_referenceFrame, *h_currentFrame;
 
     /* allocate host side int pointer */
-    cudaHostAlloc((void **) &h_referenceFrame, noElems * sizeof(int), 0);
-    cudaHostAlloc((void **) &h_currentDFrame, noElems * sizeof(int), 0);
+    cudaHostAlloc((void **) &h_referenceFrame, numElems * sizeof(int), 0);
+    cudaHostAlloc((void **) &h_currentFrame, numElems * sizeof(int), 0);
 
-    /* read from YUV file */
-    printf("reference frame file name = %s\n", argv[1]);
-    yuvReadFrame(argv[1], h_referenceFrame, noElems);
-
-    printf("current frame file name = %s\n", argv[2]);
-    yuvReadFrame(argv[2], h_currentDFrame, noElems);
+    // Read current and reference frame.
+    if(!yuvReadFrame(referenceFrameStr, h_referenceFrame, numElems)) {
+        exit(1);
+    };
+    if(!yuvReadFrame(currentFrameStr, h_currentFrame, numElems)) {
+        exit(1);
+    }
 
     /* initialize host side block list pointer */
     block *h_block_list, *result_block_list;
 
-    /* truncate the current frame to block list */
+    // Generate prediction frame, truncate into blocks.
     predictionFrame p;
-    createPredictionFrame(&p, h_currentDFrame, nx, ny, blkDim);
+    createPredictionFrame(&p, h_currentFrame, frameWidth, frameHeight, blkDim);
 
     /* allocate host side block list pointer and assign it to truncated block list*/
     cudaHostAlloc((void **) &h_block_list, p.num_blks * 48, 0);
@@ -145,24 +151,24 @@ int main(int argc, char* argv[]) {
     // alloc memeory device-side
     int *d_referenceFrame, *d_currentDFrame;
     block *d_block_list;
-    cudaMalloc(&d_referenceFrame, noElems * sizeof(int));
-    cudaMalloc(&d_currentDFrame, noElems * sizeof(int));
+    cudaMalloc(&d_referenceFrame, numElems * sizeof(int));
+    cudaMalloc(&d_currentDFrame, numElems * sizeof(int));
     cudaMalloc(&d_block_list, p.num_blks * 48);
 
     double timeStampA = getTimeStamp() ;
 
     //transfer to device
-    cudaMemcpy(d_currentDFrame, h_currentDFrame, noElems * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_referenceFrame, h_referenceFrame, noElems * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_currentDFrame, h_currentFrame, numElems * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_referenceFrame, h_referenceFrame, numElems * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_block_list, h_block_list, p.num_blks * 48, cudaMemcpyHostToDevice);
 
     double timeStampB = getTimeStamp() ;
 
     // invoke Kernel
     dim3 block(extraSpan*2 + 1, 2*extraSpan + 1);
-    dim3 grid((nx + block.x - 1) / block.x, (ny + block.y - 1) / block.y);
+    dim3 grid((frameWidth + block.x - 1) / block.x, (frameHeight + block.y - 1) / block.y);
     //dim3 grid(1, 1);
-    f_findBestMatchBlock<<<grid, block>>>(d_currentDFrame, d_referenceFrame, extraSpan,d_block_list, nx, ny);
+    f_findBestMatchBlock<<<grid, block>>>(d_currentDFrame, d_referenceFrame, extraSpan,d_block_list, frameWidth, frameHeight);
     cudaDeviceSynchronize();
 
     double timeStampC = getTimeStamp() ;
@@ -171,16 +177,39 @@ int main(int argc, char* argv[]) {
 
     double timeStampD = getTimeStamp() ;
 
-    printf("the first block has motion vector x = %d, y = %d\n",result_block_list[0].motion_vectorX,result_block_list[0].motion_vectorY);
-
+    //printf("the first block has motion vector x = %d, y = %d\n",result_block_list[0].motion_vectorX,result_block_list[0].motion_vectorY);
     printf("%.6f %.6f %.6f %.6f\n",(timeStampD - timeStampA)*1000,(timeStampB - timeStampA)*1000, (timeStampC - timeStampB)*1000, (timeStampD - timeStampC)*1000 );
-    //printf("totoal= %.6f ms CPU_GPU_transfer = %.6f ms kernel =%.6f ms GPU_CPU_transfer= %.6f ms\n",(timeStampD - timeStampA)*1000,(timeStampB - timeStampA)*1000, (timeStampC - timeStampB)*1000, (timeStampD - timeStampC)*1000  );
+    p.blks = result_block_list;
+
+    // Generate motion compensated frame and other results.
+
+    int* outputFile = (int*) malloc(bytes * 5);
+    memcpy(outputFile, h_referenceFrame, bytes);
+    memcpy(&outputFile[numElems], h_currentFrame, bytes);
+    motionCompensatedFrame(&outputFile[numElems*2], p, h_referenceFrame);
+    // Difference between current and reference frames.
+    frameDiff(&outputFile[numElems*3], h_referenceFrame, h_currentFrame, numElems);
+    // Difference between current and motion compensated frames.
+    frameDiff(&outputFile[numElems*4], &outputFile[numElems*2], h_currentFrame, numElems);
+
+    // Compare MSE score with the motion compensated frame.
+    float motionCompScore = 0.0;
+    float originalScore = 0.0;
+    for(int i =0; i < numElems; i++) {
+        motionCompScore += (outputFile[numElems*2 + i] - h_currentFrame[i]) * (outputFile[numElems*2 + i]- h_currentFrame[i]);
+        originalScore += (h_currentFrame[i] - h_referenceFrame[i]) * (h_currentFrame[i] - h_referenceFrame[i]);
+    }
+    printf("Original Score: %.4f, Compensated Score: %.4f\n", originalScore/numElems, motionCompScore/numElems);
+
+    // Output the frames of interest.
+    printf("Output file dimensions: (%d x %d)\n", frameWidth, 5*frameHeight);
+    yuvWriteFrame(outputFileName, outputFile, numElems*5);
 
     cudaFree(d_referenceFrame);
     cudaFree(d_currentDFrame);
     cudaFree(d_block_list);
     cudaFreeHost(h_referenceFrame);
-    cudaFreeHost(h_currentDFrame);
+    cudaFreeHost(h_currentFrame);
     cudaFreeHost(result_block_list);
     cudaDeviceReset();
 
