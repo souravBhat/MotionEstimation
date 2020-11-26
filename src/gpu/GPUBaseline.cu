@@ -20,16 +20,17 @@ double getTimeStamp() {
 }
 
 // Given candidate block and current frame block, compute mse.
-__device__ float computeMse(int *referenceFrame, int candBlkTopLeftX, int candBlkTopLeftY, int *predictionFrame, block blk){
+__device__ float computeMse(int *referenceFrame, int candBlkTopLeftX, int candBlkTopLeftY, int *predictionFrame, block blk, int frameWidth){
     float sum = 0;
     for(int offsetY = 0; offsetY < blk.height; offsetY++) {
-        for(int offsetX = 0; offsetX <= blk.width; offsetX++) {
-            int idxCand = (candBlkTopLeftY + offsetY) * blk.width + (candBlkTopLeftX + offsetX);
-            int idxRefBlk = (blk.top_left_y + offsetY) * blk.width + (blk.top_left_x + offsetX);
+        for(int offsetX = 0; offsetX < blk.width; offsetX++) {
+            int idxCand = (candBlkTopLeftY + offsetY) * frameWidth + (candBlkTopLeftX + offsetX);
+            int idxRefBlk = (blk.top_left_y + offsetY) * frameWidth + (blk.top_left_x + offsetX);
             sum+= (predictionFrame[idxRefBlk] - referenceFrame[idxCand])*(predictionFrame[idxRefBlk] - referenceFrame[idxCand]);
         }
     }
-    return sum/(blk.width * blk.height);
+    float score = sum / (blk.width * blk.height);
+    return score;
 }
 
 
@@ -37,10 +38,10 @@ __device__ float computeMse(int *referenceFrame, int candBlkTopLeftX, int candBl
 
 //device-side matrix addition
 
-__global__ void f_findBestMatchBlock(int *currentframe, int *referenceframe,int extraSpan, block *block_list, int nx, int ny){
+__global__ void f_findBestMatchBlock(int *currentframe, int *referenceframe,int extraSpan, block *block_list, int frameWidth, int frameHeight){
     //printf("%d\n",block_list[0].height);
     /* pick the block by using GPU block ID*/
-    int blockID = blockIdx.y * ( nx / block_list[0].width) + blockIdx.x;
+    int blockID = blockIdx.y * ( frameWidth / block_list[0].width) + blockIdx.x;
     block currentBlk = block_list[blockID];
 
     /* computing the candidate block location by using thread ID*/
@@ -54,23 +55,37 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceframe,int 
     __shared__ float result[ 1024 ];
     __shared__ int threadID[ 1024 ];
 
+
     threadID[ threadIdx.x + blockDim.x * threadIdx.y ] =threadIdx.x + blockDim.x * threadIdx.y;
+    //printf("With ID = %d, candidateBlcokTopLeftX = %d, candidateBlcokTopLeftY = %d\n",threadID[ threadIdx.x + blockDim.x * threadIdx.y ],candidateBlcokTopLeftX,candidateBlcokTopLeftY);
+    //printf("currentBlk.width = %d, frameWidth = %d, frameHeight = %d\n",currentBlk.width, frameWidth , frameHeight);
+
+
     result[threadIdx.x + threadIdx.y*blockDim.x] =INT_MAX;
-    if (candidateBlcokTopLeftX >= 0 && candidateBlcokBottomRightX <= nx && candidateBlcokTopLeftY >= 0 && candidateBlcokBottomRightY <= ny){
-        result[threadIdx.x + threadIdx.y*blockDim.x] = computeMse(referenceframe, candidateBlcokTopLeftX, candidateBlcokTopLeftY, currentframe, currentBlk);
-        //printf("ID = %d, value = %lf\n",threadID[ threadIdx.x + blockDim.x * threadIdx.y ], result[threadIdx.x + threadIdx.y*blockDim.x]);
+    if (candidateBlcokTopLeftX >= 0 && candidateBlcokBottomRightX <= frameWidth && candidateBlcokTopLeftY >= 0 && candidateBlcokBottomRightY <= frameHeight) {
+        result[threadIdx.x + threadIdx.y * blockDim.x] = computeMse(referenceframe, candidateBlcokTopLeftX,
+                                                                    candidateBlcokTopLeftY, currentframe, currentBlk, frameWidth);
+        //printf("ID = %d, value = %lf\n", threadIdx.x + blockDim.x * threadIdx.y,
+        //       result[threadIdx.x + threadIdx.y * blockDim.x]);
     }
 
     __syncthreads();
 
     /* calculating the minimum value in result array */
-    unsigned int i = (nuBlocksWithinGPUGrid + 1)/2;
-    while(i != 0){
-        if(threadIdx.x + threadIdx.y*blockDim.x < i && threadIdx.x + threadIdx.y*blockDim.x + i < nuBlocksWithinGPUGrid ){
+    unsigned int i = (nuBlocksWithinGPUGrid + 1) / 2;
+    //printf("ID = %d, i = %d, nuBlocksWithinGPUGrid = %d\n", threadIdx.x + blockDim.x * threadIdx.y , i , nuBlocksWithinGPUGrid);
+
+    while (i != 0) {
+//            if (threadIdx.x + threadIdx.y * blockDim.x < i &&
+//                threadIdx.x + threadIdx.y * blockDim.x + i < nuBlocksWithinGPUGrid) {
+        if (threadIdx.x + threadIdx.y * blockDim.x < i &&
+            threadIdx.x + threadIdx.y * blockDim.x + i < nuBlocksWithinGPUGrid) {
             //printf("comparing %lf to %lf \n",result[threadIdx.x + threadIdx.y*blockDim.x],result[threadIdx.x + threadIdx.y*blockDim.x + i]);
-            if (result[threadIdx.x + threadIdx.y*blockDim.x] > result[threadIdx.x + threadIdx.y*blockDim.x + i]){
-                result[threadIdx.x + threadIdx.y*blockDim.x] = result[threadIdx.x + threadIdx.y*blockDim.x + i];
-                threadID[threadIdx.x + threadIdx.y*blockDim.x] = threadID[threadIdx.x + threadIdx.y*blockDim.x + i];
+            if (result[threadIdx.x + threadIdx.y * blockDim.x] >
+                result[threadIdx.x + threadIdx.y * blockDim.x + i]) {
+                result[threadIdx.x + threadIdx.y * blockDim.x] = result[threadIdx.x + threadIdx.y * blockDim.x + i];
+                threadID[threadIdx.x + threadIdx.y * blockDim.x] = threadID[threadIdx.x + threadIdx.y * blockDim.x +
+                                                                            i];
             }
         }
         __syncthreads();
@@ -80,20 +95,23 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceframe,int 
     /* print out the best one result*/
 #ifdef DEBUG
     if(threadIdx.x + threadIdx.y*blockDim.x == 0){
-        printf("smallest MSE = %lf with thread ID = %d\n",result[0], threadID[0]);
+        //printf("smallest MSE = %lf with thread ID = %d\n",result[0], threadID[0]);
     }
 #endif
     __syncthreads();
 
     /* compute the motion vector */
-    if(threadIdx.x + threadIdx.y*blockDim.x == threadID[0]){
+    if (threadIdx.x + threadIdx.y * blockDim.x == threadID[0]) {
 
         block_list[blockID].motion_vectorX = candidateBlcokTopLeftX - currentBlk.top_left_x;
         block_list[blockID].motion_vectorY = candidateBlcokTopLeftY - currentBlk.top_left_y;
-        //printf("the  block has motion vector x = %d, y = %d\n",block_list[blockID].motion_vectorX,block_list[blockID].motion_vectorY);
+        //printf("the  block has candidateBlcokTopLeftX = %d and currentBlk.top_left_x = %d and  motion vector x = %d\n",candidateBlcokTopLeftX, currentBlk.top_left_x, block_list[blockID].motion_vectorX);
+        printf("the %d block has motion vector x = %d, y = %d\n", blockID, block_list[blockID].motion_vectorX,
+               block_list[blockID].motion_vectorY);
 
     }
     __syncthreads();
+
 }
 
 
@@ -166,7 +184,11 @@ int main(int argc, char* argv[]) {
 
     // invoke Kernel
     dim3 block(extraSpan*2 + 1, 2*extraSpan + 1);
-    dim3 grid((frameWidth + block.x - 1) / block.x, (frameHeight + block.y - 1) / block.y);
+    printf("GPU block size (search window dimension) = %d \n",extraSpan*2 + 1);
+    printf("frameWidth = %d and frameHeight = %d\n",frameWidth,frameHeight );
+    printf("blkDim = %d \n",blkDim );
+    printf("grid size x = %d and grid y = %d\n",(frameWidth + blkDim - 1) / blkDim,(frameHeight + blkDim - 1) / blkDim );
+    dim3 grid((frameWidth + blkDim - 1) / blkDim, (frameHeight + blkDim - 1) / blkDim);
     //dim3 grid(1, 1);
     f_findBestMatchBlock<<<grid, block>>>(d_currentDFrame, d_referenceFrame, extraSpan,d_block_list, frameWidth, frameHeight);
     cudaDeviceSynchronize();
@@ -180,6 +202,10 @@ int main(int argc, char* argv[]) {
     //printf("the first block has motion vector x = %d, y = %d\n",result_block_list[0].motion_vectorX,result_block_list[0].motion_vectorY);
     printf("%.6f %.6f %.6f %.6f\n",(timeStampD - timeStampA)*1000,(timeStampB - timeStampA)*1000, (timeStampC - timeStampB)*1000, (timeStampD - timeStampC)*1000 );
     p.blks = result_block_list;
+    for (int i = 0; i < 396; i++){
+        printf("the %d block has motion vector x = %d, y = %d\n",i,result_block_list[i].motion_vectorX,result_block_list[i].motion_vectorY);
+
+    }
 
     // Generate motion compensated frame and other results.
 
@@ -195,10 +221,10 @@ int main(int argc, char* argv[]) {
     // Compare MSE score with the motion compensated frame.
     float motionCompScore = 0.0;
     float originalScore = 0.0;
-    for(int i =0; i < numElems; i++) {
-        motionCompScore += (outputFile[numElems*2 + i] - h_currentFrame[i]) * (outputFile[numElems*2 + i]- h_currentFrame[i]);
-        originalScore += (h_currentFrame[i] - h_referenceFrame[i]) * (h_currentFrame[i] - h_referenceFrame[i]);
-    }
+//    for(int i =0; i < numElems; i++) {
+//        motionCompScore += (outputFile[numElems*2 + i] - h_currentFrame[i]) * (outputFile[numElems*2 + i]- h_currentFrame[i]);
+//        originalScore += (h_currentFrame[i] - h_referenceFrame[i]) * (h_currentFrame[i] - h_referenceFrame[i]);
+//    }
     printf("Original Score: %.4f, Compensated Score: %.4f\n", originalScore/numElems, motionCompScore/numElems);
 
     // Output the frames of interest.
