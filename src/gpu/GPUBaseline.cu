@@ -106,8 +106,10 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceframe,int 
         block_list[blockID].motion_vectorX = candidateBlcokTopLeftX - currentBlk.top_left_x;
         block_list[blockID].motion_vectorY = candidateBlcokTopLeftY - currentBlk.top_left_y;
         //printf("the  block has candidateBlcokTopLeftX = %d and currentBlk.top_left_x = %d and  motion vector x = %d\n",candidateBlcokTopLeftX, currentBlk.top_left_x, block_list[blockID].motion_vectorX);
+#ifdef DEBUG
         printf("the %d block has motion vector x = %d, y = %d\n", blockID, block_list[blockID].motion_vectorX,
                block_list[blockID].motion_vectorY);
+#endif
 
     }
     __syncthreads();
@@ -124,7 +126,6 @@ int main(int argc, char* argv[]) {
     }
     char * currentFrameStr = argv[1];
     char * referenceFrameStr = argv[2];
-    char * outputDir = argv[3];
     int blkDim = argc > 4 ? atoi(argv[4]) : 16;
     int extraSpan = argc > 5 ? atoi(argv[5]) : 15;
     int frameWidth =  argc > 6 ? atoi(argv[6]) : 3840;
@@ -132,10 +133,6 @@ int main(int argc, char* argv[]) {
 
     int numElems = frameWidth * frameHeight;
     int bytes = numElems * sizeof(int);
-
-    // File locations for the results.
-    char outputFileName[100];
-    sprintf(outputFileName, "%s/output_%d_%d.yuv", outputDir, blkDim, extraSpan);
 
     // alloc memeory host-side
     int *h_referenceFrame, *h_currentFrame;
@@ -164,7 +161,9 @@ int main(int argc, char* argv[]) {
     cudaHostAlloc((void **) &result_block_list, p.num_blks * 48, 0);
     h_block_list = p.blks;
 
+#ifdef DEBUG
     printf("Number of blocks trauncated = %d\n", p.num_blks);
+#endif
 
     // alloc memeory device-side
     int *d_referenceFrame, *d_currentDFrame;
@@ -184,10 +183,12 @@ int main(int argc, char* argv[]) {
 
     // invoke Kernel
     dim3 block(extraSpan*2 + 1, 2*extraSpan + 1);
+#ifdef DEBUG
     printf("GPU block size (search window dimension) = %d \n",extraSpan*2 + 1);
     printf("frameWidth = %d and frameHeight = %d\n",frameWidth,frameHeight );
     printf("blkDim = %d \n",blkDim );
     printf("grid size x = %d and grid y = %d\n",(frameWidth + blkDim - 1) / blkDim,(frameHeight + blkDim - 1) / blkDim );
+#endif
     dim3 grid((frameWidth + blkDim - 1) / blkDim, (frameHeight + blkDim - 1) / blkDim);
     //dim3 grid(1, 1);
     f_findBestMatchBlock<<<grid, block>>>(d_currentDFrame, d_referenceFrame, extraSpan,d_block_list, frameWidth, frameHeight);
@@ -202,10 +203,12 @@ int main(int argc, char* argv[]) {
     //printf("the first block has motion vector x = %d, y = %d\n",result_block_list[0].motion_vectorX,result_block_list[0].motion_vectorY);
     printf("%.6f %.6f %.6f %.6f\n",(timeStampD - timeStampA)*1000,(timeStampB - timeStampA)*1000, (timeStampC - timeStampB)*1000, (timeStampD - timeStampC)*1000 );
     p.blks = result_block_list;
+#ifdef DEBUG
     for (int i = 0; i < 396; i++){
         printf("the %d block has motion vector x = %d, y = %d\n",i,result_block_list[i].motion_vectorX,result_block_list[i].motion_vectorY);
 
     }
+#endif
 
     // Generate motion compensated frame and other results.
 
@@ -221,15 +224,16 @@ int main(int argc, char* argv[]) {
     // Compare MSE score with the motion compensated frame.
     float motionCompScore = 0.0;
     float originalScore = 0.0;
-//    for(int i =0; i < numElems; i++) {
-//        motionCompScore += (outputFile[numElems*2 + i] - h_currentFrame[i]) * (outputFile[numElems*2 + i]- h_currentFrame[i]);
-//        originalScore += (h_currentFrame[i] - h_referenceFrame[i]) * (h_currentFrame[i] - h_referenceFrame[i]);
-//    }
-    printf("Original Score: %.4f, Compensated Score: %.4f\n", originalScore/numElems, motionCompScore/numElems);
+    for(int i =0; i < numElems; i++) {
+        motionCompScore += (outputFile[numElems*2 + i] - h_currentFrame[i]) * (outputFile[numElems*2 + i]- h_currentFrame[i]);
+        originalScore += (h_currentFrame[i] - h_referenceFrame[i]) * (h_currentFrame[i] - h_referenceFrame[i]);
+    }
 
     // Output the frames of interest.
-    printf("Output file dimensions: (%d x %d)\n", frameWidth, 5*frameHeight);
-    yuvWriteFrame(outputFileName, outputFile, numElems*5);
+    #ifdef OUTPUT_FRAMES
+    char * outputPath = argv[3];
+    yuvWriteFrame(outputPath, outputFile, numElems*5);
+    #endif
 
     cudaFree(d_referenceFrame);
     cudaFree(d_currentDFrame);

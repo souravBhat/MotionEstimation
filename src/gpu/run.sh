@@ -1,4 +1,13 @@
 #!/bin/bash
+
+# Flags:
+#    -v : version of the code
+#    -b : blk dimension to run with
+#    -s : extra span to run with
+#    -g : generate the output frames
+#    -h : help
+
+set -eo pipefail
 mkdir -p ../../bin
 mkdir -p ../../results/gpu
 
@@ -6,42 +15,55 @@ outputFrames=false
 version=1
 blkDim=16
 extraSpan=7
-while getopts ":v:b:s:g" opt; do
+showHelp=false
+while getopts ":v:b:s:gh" opt; do
 	case ${opt} in 
 	  v) version=$OPTARG;;	
 	  b) blkDim=$OPTARG;;
 	  s) extraSpan=$OPTARG;;
 	  g) outputFrames=true;;
+	  h) showHelp=true;;
 	  \?) echo "Usage: cmd -v <version> [-b <blkDim>] [-s <extraSpan>] [-g]";;
 	esac
 done
-echo $version $outputFrames $blkDim $extraSpan
 shift "$((OPTIND - 1))"
 
-resultsDir="../../results/gpu"
-ouputFile="${resultDir}/v${outputID}.txt"
-previousVersion=0
-
-if $outputFrames ;then
-	echo "Will output frames"
-	nvcc -arch sm_52 ../common/utils.c ../common/block.c ../common/prediction_frame.c GPUBaseline.cu -DOUTPUT_FRAMES -o ../../bin/gpu
-else
-	echo "Won't output frames"
-	nvcc -arch sm_52 ../common/utils.c ../common/block.c ../common/prediction_frame.c GPUBaseline.cu -o ../../bin/gpu
+if $showHelp;then
+	echo "Usage: cmd -v <version> [-b <blkDim>] [-s <extraSpan>] [-g]"
+	exit
 fi
 
-echo "BlkDim: ${blkDim}, ExtraSpan: ${extraSpan}"
+resultsDir="../../results/gpu"
+ouputFile="${resultsDir}/v${version}.txt"
+previousVersion=0
+outputProgram=../../bin/gpu_v$version
+if $outputFrames ;then
+	nvcc -arch sm_52 ../common/utils.c ../common/block.c \
+		../common/prediction_frame.c GPUBaseline.cu -DOUTPUT_FRAMES -o $outputProgram
+else
+	nvcc -arch sm_52 ../common/utils.c ../common/block.c \
+		../common/prediction_frame.c GPUBaseline.cu -o $outputProgram
+fi
+
+resultsTxtPath=../../results/gpu/v${version}.txt
+printf "[\n   Version= $version\n   BlkDim= $blkDim\n   ExtraSpan= $extraSpan\n   OuputFrames= $outputFrames\n]\n"
+printf "[ Version= $version, BlkDim= $blkDim, ExtraSpan=$extraSpan, OuputFrames= $outputFrames ]\n\n" > $resultsTxtPath
+
 echo "Running on Foreman..."
-../../bin/gpu ../../frames/ForemanYF4.yuv ../../frames/ForemanYF1.yuv \
-	../../results/gpu/foreman_${blkDim}_${extraSpan} $blkDim $extraSpan 352 288 > $outputFile
+$outputProgram ../../frames/ForemanYF4.yuv ../../frames/ForemanYF1.yuv \
+	../../results/gpu/foreman_v${version}.yuv $blkDim $extraSpan 352 288 >> $resultsTxtPath
 
 echo "Running on Jockey..." 
-../../bin/gpu ../../frames/JockeyYF2.yuv ../../frames/JockeyYF1.yuv \
-	../../results/gpu/jockey_${blkDim}_${extraSpan} $blkDim $extraSpan 3840 2160 >> $outputFile
+$outputProgram ../../frames/JockeyYF2.yuv ../../frames/JockeyYF1.yuv \
+	../../results/gpu/jockey_v${version}.yuv $blkDim $extraSpan 3840 2160 >> $resultsTxtPath
 
 echo "Running on Beauty..."
-../../bin/gpu ../../frames/BeautyYF2.yuv ../../frames/BeautyYF1.yuv \
-	../../results/gpu/beauty_${blkDim}_${extraSpan} $blkDim $extraSpan 3840 2160 >> $outputFile
+$outputProgram ../../frames/BeautyYF2.yuv ../../frames/BeautyYF1.yuv \
+	../../results/gpu/beauty_v${version}.yuv $blkDim $extraSpan 3840 2160 >> $resultsTxtPath
+
+if $outputFrames ;then
+	printf "Output YUV file dimensions:\n   Foreman:\t(352 x 1440)\n   Jockey:\t(3860 x 10,700)\n   Beauty:\t(3860 x 10,700)\n"
+fi
 
 if [[ $version -gt 1 ]];then
 	previousVersion=$((version-1))
@@ -54,14 +76,14 @@ fi
 count=0
 images="Foreman Jockey Beauty"
 imageTokens=( $images )
-metrics="totalTime CPU->GPU GPU->CPU kernel"
+metrics="totalTime CPU->GPU kernel GPU->CPU"
 metricTokens=( $metrics )
-epsilon=0.001
+epsilon=0.1
 
 while read -r current && read -r previous <&3;do
 	currentVals=( $current )
 	previousVals=( $previous )
-	printf "Image: ${imageTokens[$count]}\n"
+	printf "Regression Testing: ${imageTokens[$count]}\n"
 	for i in {0..3};do
 		currentVal=${currentVals[$i]}
 		previousVal=${previousVals[$i]}
@@ -70,6 +92,5 @@ while read -r current && read -r previous <&3;do
 		fi
 	done
 	count=$((count + 1))
-done < $outputFile 3<"${resultDir}/$previousVersion.txt"
-
+done < <(tail -n3 "${resultsDir}/v${version}.txt") 3< <(tail -n3 "${resultsDir}/v$previousVersion.txt")
 
