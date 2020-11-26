@@ -5,10 +5,12 @@
 #include <inttypes.h>
 #include <limits.h>
 
-#include "YUVreadfile.h"
-#include "YUVwritefile.h"
-#include "../common/block.h"
-#include "../common/prediction_frame.h"
+extern "C"{
+    #include "../common/utils.h"
+    #include "../common/block.h"
+    #include "../common/prediction_frame.h"
+}
+
 
 // time stamp function in seconds
 double getTimeStamp() {
@@ -96,9 +98,6 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceframe,int 
 
 
 
-
-
-
 int main(int argc, char* argv[]) {
 
     if (argc != 3) {
@@ -109,41 +108,28 @@ int main(int argc, char* argv[]) {
     int ny = 2160;
     int blkDim = 16;
     int noElems = nx * ny;
-//    int bytes_uint8 = noElems * sizeof(uint8_t);
-//    int bytes_int = noElems * sizeof(int);
+
     int extraSpan = 15;
     printf("block dimension = %d\n", blkDim);
     printf("extraSpan  = %d\n", extraSpan);
 
     // alloc memeory host-side
-    uint8_t *h_uint8_referenceFrame = (uint8_t *) malloc(noElems * sizeof(uint8_t));
-    uint8_t *h_uint8_currentDFrame = (uint8_t *) malloc(noElems * sizeof(uint8_t));
-    printf("total bytes = %d\n", noElems * sizeof(uint8_t));
-
-    printf("reference frame file name = %s\n", argv[1]);
-    FILE *f = yuvOpenInputFile(argv[1]);
-    yuvReadFrame(f,h_uint8_referenceFrame);
-    fclose(f);
-
-    printf("current frame file name = %s\n", argv[2]);
-    f = yuvOpenInputFile(argv[2]);
-    yuvReadFrame(f,h_uint8_currentDFrame);
-    fclose(f);
-
-    /* initialize host side int pointer */
-    int *h_referenceFrame;
-    int *h_currentDFrame;
-    block *h_block_list, *result_block_list;
+    int *h_referenceFrame, *h_currentDFrame;
+    printf("total bytes = %d\n", noElems * sizeof(int));
 
     /* allocate host side int pointer */
     cudaHostAlloc((void **) &h_referenceFrame, noElems * sizeof(int), 0);
-    cudaHostAlloc((block **) &h_currentDFrame, noElems * sizeof(int), 0);
+    cudaHostAlloc((void **) &h_currentDFrame, noElems * sizeof(int), 0);
 
-    /* copy data from uint8 pointer to int pointer */
-    for (int i = 0; i < noElems; i ++){
-        *(h_currentDFrame + i) = (int) *(h_uint8_currentDFrame + i);
-        *(h_referenceFrame + i) = (int) *(h_uint8_referenceFrame + i);
-    }
+    /* read from YUV file */
+    printf("reference frame file name = %s\n", argv[1]);
+    yuvReadFrame(argv[1], h_referenceFrame, noElems);
+
+    printf("current frame file name = %s\n", argv[2]);
+    yuvReadFrame(argv[2], h_currentDFrame, noElems);
+
+    /* initialize host side block list pointer */
+    block *h_block_list, *result_block_list;
 
     /* truncate the current frame to block list */
     predictionFrame p;
@@ -154,20 +140,7 @@ int main(int argc, char* argv[]) {
     cudaHostAlloc((void **) &result_block_list, p.num_blks * 48, 0);
     h_block_list = p.blks;
 
-//    char *f_output = "./output/Jockey_3840x2160YF2.yuv";
-//    yuvWriteToFile( f_output, ny, nx, h_currentDFrame);
-//    uint8_t *ptr = h_currentDFrame;
-//    for (int i = 0; i < 100; i ++ ){
-//        printf("%" PRIu8 "\n", *(ptr++));
-//    }
-    //pin memory in host side
-    //truncate frame to blocks
-
-    //visualize the size of one block object
-//    printf("%p\n", &h_block_list[0]);
-//    printf("%p\n", &h_block_list[1]);
     printf("Number of blocks trauncated = %d\n", p.num_blks);
-
 
     // alloc memeory device-side
     int *d_referenceFrame, *d_currentDFrame;

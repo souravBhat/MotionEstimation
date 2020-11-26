@@ -24,10 +24,10 @@ previousVersion=0
 
 if $outputFrames ;then
 	echo "Will output frames"
-	nvcc -arch sm_52 YUVreadfile.cu YUVwritefile.cu ../common/block.c ../common/prediction_frame.c GPUBaseline.cu -DOUTPUT_FRAMES -o ../../bin/gpu
+	nvcc -arch sm_52 ../common/utils.c ../common/block.c ../common/prediction_frame.c GPUBaseline.cu -DOUTPUT_FRAMES -o ../../bin/gpu
 else
 	echo "Won't output frames"
-	nvcc -arch sm_52 YUVreadfile.cu YUVwritefile.cu ../common/block.c ../common/prediction_frame.c GPUBaseline.cu -o ../../bin/gpu
+	nvcc -arch sm_52 ../common/utils.c ../common/block.c ../common/prediction_frame.c GPUBaseline.cu -o ../../bin/gpu
 fi
 
 echo "BlkDim: ${blkDim}, ExtraSpan: ${extraSpan}"
