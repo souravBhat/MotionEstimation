@@ -1,12 +1,5 @@
 #!/bin/bash
 
-# Flags:
-#    -v : version of the code
-#    -b : blk dimension to run with
-#    -s : extra span to run with
-#    -g : generate the output frames
-#    -h : help
-
 set -eo pipefail
 mkdir -p ../../bin
 mkdir -p ../../results/gpu
@@ -29,8 +22,13 @@ done
 shift "$((OPTIND - 1))"
 
 if $showHelp;then
-	echo "Usage: cmd -v <version> [-b <blkDim>] [-s <extraSpan>] [-g]"
-	exit
+    printf "\nFlags:
+    -v : version of the code
+    -b : blk dimension to run with
+    -s : extra span to run with
+    -g : generate the output frames 
+    -h : help\n\n"
+    exit
 fi
 
 resultsDir="../../results/gpu"
