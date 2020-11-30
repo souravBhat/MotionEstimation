@@ -12,14 +12,6 @@ extern "C"{
     #include "../common/prediction_frame.h"
 }
 
-
-// time stamp function in seconds
-double getTimeStamp() {
-    struct timeval tv ;
-    gettimeofday( &tv, NULL ) ;
-    return (double) tv.tv_usec/1000000 + tv.tv_sec ;
-}
-
 // Given candidate block and current frame block, compute mse.
 /*__device__ float computeMse(int *referenceFrame, int candBlkTopLeftX, int candBlkTopLeftY, int *predictionFrame, block blk, int frameWidth){
     float sum = 0;

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <math.h>
+#include <pthread.h>
 #include "../common/block.h"
 #include "../common/prediction_frame.h"
 #include "../common/utils.h"
@@ -77,6 +78,30 @@ float findBestBlkMse(predictionFrame pf, int *referenceFrame, block *blk, int ex
   return match[0];
 }
 
+// Run config for pthread.
+typedef struct runConfig {
+  predictionFrame* p;
+  int* refFrame;
+  block* blk;
+  int extraSpan;
+  int score;
+} runConfig;
+
+void createRunConfig(runConfig* config, predictionFrame* p, int* refFrame, block* blk, int extraSpan) {
+  config->p = p;
+  config->refFrame = refFrame;
+  config->blk = blk;
+  config->extraSpan = extraSpan;
+}
+
+// Method called by the pthreads.
+void *runFindBestBlkMse(void* args) {
+  runConfig* config = (runConfig*) args;
+  int val = findBestBlkMse(*config->p, config->refFrame, config->blk, config->extraSpan);
+  config->score = val;
+  pthread_exit(0);
+}
+
 int main(int argc, char* argv[]) {
   if (argc < 4) {
       printf("Error: wrong number of argument. Usage: <current_frame> <reference_frame> <output_dir> [<blk_dim>] [<extra_span>] [<width>] [<height>]\n");
@@ -112,17 +137,18 @@ int main(int argc, char* argv[]) {
   // Generate prediction frame, truncate into blocks and find best match mse block.
   predictionFrame p;
   createPredictionFrame(&p, currentFrame, frameWidth, frameHeight, blkDim);
-  for(int i = 0; i < p.num_blks; i++) {
-    float val = findBestBlkMse(p, refFrame, &p.blks[i], extraSpan);
+  pthread_t tids[p.num_blks];
 
-    #ifdef DEBUG
-    #if (DEBUG > 0)
-    if (1) {
-      printf("Blk %s, score: %.3f, mv: [%d, %d]\n", blkStr(p.blks[i]), val, p.blks[i].motion_vectorX, p.blks[i].motion_vectorY);
-    }
-    #endif
-    #endif
+  double timeStampA = getTimeStamp();
+  for(int i = 0; i < p.num_blks; i++) {
+    runConfig *config = (runConfig*)malloc(sizeof(runConfig));
+    createRunConfig(config, &p, refFrame, &p.blks[i], extraSpan);
+    pthread_create(&tids[i], NULL, runFindBestBlkMse, config);
   }
+
+  // Wait for threads to complete.
+  for(int i = 0; i < p.num_blks; i++) pthread_join(tids[i], NULL);
+  double timeStampB = getTimeStamp();
 
   // Generate motion compensated frame and other results.
   int* outputFile = (int*) malloc(bytes * 5);
@@ -146,4 +172,5 @@ int main(int argc, char* argv[]) {
   // Output the frames of interest.
   printf("Output file dimensions: (%d x %d)\n", frameWidth, 5*frameHeight);
   yuvWriteFrame(outputFileName, outputFile, numElems*5);
+  printf("Computation time: %.lf ms\n", (timeStampB - timeStampA)*1000);
 }
