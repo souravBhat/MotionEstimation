@@ -12,7 +12,18 @@ extern "C"{
 }
 
 // Given candidate block and current frame block, compute mse.
-__device__ float computeMse(int *referenceFrame, int candBlkTopLeftX, int candBlkTopLeftY, int *predictionFrame, block blk, int frameWidth, int* window, int windowWidth, int windowTopLeftX, int windowTopLeftY){
+__device__ float computeMse(
+  int *referenceFrame,
+  int *predictionFrame,
+  int* window,
+  block blk,
+  int candBlkTopLeftX,
+  int candBlkTopLeftY,
+  int frameWidth,
+  int windowWidth,
+  int windowTopLeftX,
+  int windowTopLeftY
+){
     float sum = 0;
     for(int offsetY = 0; offsetY < blk.height; offsetY++) {
         for(int offsetX = 0; offsetX < blk.width; offsetX++) {
@@ -69,8 +80,11 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
         candBlkTopLeftX <= currentBlk.bottom_right_x + extraSpan - currentBlk.width + 1 &&
         candBlkTopLeftY <= currentBlk.bottom_right_y + extraSpan - currentBlk.height + 1) {
 
-        result[threadIdx.x ] = computeMse(referenceFrame, candBlkTopLeftX,
-            candBlkTopLeftY, currentframe, currentBlk, frameWidth, window, hypoWindowWidth, hypoWindowTopLeftX, hypoWindowTopLeftY);
+        result[threadIdx.x ] = computeMse(
+          referenceFrame, currentframe, window, currentBlk,
+          candBlkTopLeftX, candBlkTopLeftY, frameWidth, hypoWindowWidth,
+          hypoWindowTopLeftX, hypoWindowTopLeftY
+        );
     }
     __syncthreads();
 
