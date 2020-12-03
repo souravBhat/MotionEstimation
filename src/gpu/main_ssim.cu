@@ -177,8 +177,8 @@ int main(int argc, char* argv[]) {
     }
     char * currentFrameStr = argv[1];
     char * referenceFrameStr = argv[2];
-    int blkDim = argc > 4 ? atoi(argv[4]) : 16;
-    int extraSpan = argc > 5 ? atoi(argv[5]) : 15;
+    int blkDim = argc > 4 ? atoi(argv[4]) : 8;
+    int extraSpan = argc > 5 ? atoi(argv[5]) : 12;
     int frameWidth =  argc > 6 ? atoi(argv[6]) : 3840;
     int frameHeight = argc > 7 ? atoi(argv[7]) : 2160;
 

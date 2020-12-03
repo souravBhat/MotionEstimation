@@ -6,8 +6,8 @@ mkdir -p ../../results/gpu
 
 outputFrames=false
 version=1
-blkDim=16
-extraSpan=7
+blkDim=8
+extraSpan=12
 showHelp=false
 while getopts ":v:b:s:gh" opt; do
 	case ${opt} in
@@ -37,10 +37,10 @@ previousVersion=0
 outputProgram=../../bin/gpu_v$version
 if $outputFrames ;then
 	nvcc -arch sm_52 ../common/utils.c ../common/block.c \
-		../common/prediction_frame.c GPUBaseline_ssim.cu -DOUTPUT_FRAMES -o $outputProgram
+		../common/prediction_frame.c main_ssim.cu -DOUTPUT_FRAMES -o $outputProgram
 else
 	nvcc -arch sm_52 ../common/utils.c ../common/block.c \
-		../common/prediction_frame.c GPUBaseline_ssim.cu -o $outputProgram
+		../common/prediction_frame.c main_ssim.cu -o $outputProgram
 fi
 
 resultsTxtPath=../../results/gpu/v${version}.txt
