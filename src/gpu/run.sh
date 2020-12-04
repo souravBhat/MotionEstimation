@@ -60,7 +60,7 @@ $outputProgram ../../frames/BeautyYF2.yuv ../../frames/BeautyYF1.yuv \
 	../../results/gpu/beauty_v${version}.yuv $blkDim $extraSpan 3840 2160 >> $resultsTxtPath
 
 if $outputFrames ;then
-	printf "Output YUV file dimensions:\n   Foreman:\t(352 x 1440)\n   Jockey:\t(3860 x 10,700)\n   Beauty:\t(3860 x 10,700)\n"
+	printf "Output YUV file dimensions:\n   Foreman:\t(352 x 1440)\n   Jockey:\t(3840 x 10,800)\n   Beauty:\t(3840 x 10,800)\n"
 fi
 
 if [[ $version -gt 1 ]];then
