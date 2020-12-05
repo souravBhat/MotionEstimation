@@ -8,7 +8,7 @@
 #include <string.h>
 #include <sys/time.h>
 #include "utils.h"
-
+#include <math.h>
 
 void printArrFrame(int * frame, int nx, int ny) {
   for(int y = 0; y < ny; y++) {
@@ -129,3 +129,35 @@ void motionCompensatedFrame(int* motionCompFrame, predictionFrame pf, int* ref_f
       }
     }
 }
+
+//Calculates image PSNR value
+double imagePSNR(int *frame1, int *frame2, int x, int y)
+{
+    double MSE=0.0;
+    double MSEtemp=0.0;
+    double psnr=0.0;
+    int index;
+    int MAX = 0;
+    //Calculate MSE
+    for(index=0;index<x*y;index++)
+    {
+        if (MAX < frame1[index]){
+            MAX = frame1[index];
+        }
+        if (MAX < frame2[index]){
+            MAX = frame2[index];
+        }
+        MSEtemp=abs(frame1[index]-frame2[index]);
+        MSE+=MSEtemp*MSEtemp;
+    }
+    MSE/=x*y;
+
+    //Avoid division by zero
+    if(MSE==0) return 99.0;
+
+    psnr=20*log10(MAX) - 10*log10(MSE);
+
+    return psnr;
+}
+
+
