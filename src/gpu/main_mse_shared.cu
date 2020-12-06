@@ -23,14 +23,15 @@ __device__ float computeMse(
 
   int *predictionFrame,
   int* window,
-  int* windowPred,
   block blk,
   int candBlkTopLeftX,
   int candBlkTopLeftY,
   int frameWidth,
   int windowWidth,
   int windowTopLeftX,
-  int windowTopLeftY
+  int windowTopLeftY,
+  int numWindowElems,
+  int numWindowpred
 ){
 //  printf("HERE???");
 
@@ -38,8 +39,8 @@ __device__ float computeMse(
     for(int offsetY = 0; offsetY < blk.height; offsetY++) {
         for(int offsetX = 0; offsetX < blk.width; offsetX++) {
             int idxCand = (candBlkTopLeftY - windowTopLeftY + offsetY) * windowWidth + (candBlkTopLeftX - windowTopLeftX + offsetX);
-            int idxRefBlk = (blk.top_left_y + offsetY) * frameWidth + (blk.top_left_x + offsetX);
-            int val1 = windowPred[idxRefBlk] ;
+            int idxRefBlk = (offsetY) * blk.width + (offsetX);
+            int val1 = window[numWindowElems+idxRefBlk] ;
             int val2 = window[idxCand];
             int diff = val1 - val2;
             sum+= diff * diff;
@@ -50,7 +51,7 @@ __device__ float computeMse(
 }
 
 
-__global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int extraSpan, block *block_list, int frameWidth, int frameHeight){
+__global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int extraSpan, block *block_list, int frameWidth, int frameHeight, int numWindowElems, int numWindowpred){
     /* pick the block by using GPU block ID*/
     int blockID = blockIdx.y * ( frameWidth / block_list[0].width) + blockIdx.x;
     block currentBlk = block_list[blockID];
@@ -72,8 +73,8 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
     int hypoWindowWidth= hypoWindowBottomRightX - hypoWindowTopLeftX + 1;
 
 
-    int predBlkTopLeftX = currentBlk.top_left_x + tidX;
-    int predBlkTopLeftY = currentBlk.top_left_y + tidY;
+    int predBlkTopLeftX = currentBlk.top_left_x;// + threadIdx.x;
+    int predBlkTopLeftY = currentBlk.top_left_y;// + threadIdx.y;
     int predBlkBottomRightX = predBlkTopLeftX + currentBlk.width - 1 ;
     int predBlkBottomRightY = predBlkTopLeftY + currentBlk.height - 1 ;
 
@@ -82,7 +83,6 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
     __shared__ int threadID[ 1024 ];
     // Contains the window relevant for this particular block.
     extern __shared__ int window[];
-    extern __shared__ int windowPred[];
 
     // Initialize shared memory values.
     threadID[threadIdx.x] = threadIdx.x;
@@ -92,12 +92,13 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
       window[threadIdx.x] = referenceFrame[candBlkTopLeftY * frameWidth + candBlkTopLeftX];
     }
     __syncthreads();
-
+//printf("%d   ",threadIdx.x);
+    int offset = threadIdx.x % numWindowpred;
     if (predBlkTopLeftX >= 0 && predBlkTopLeftY >= 0 && predBlkBottomRightX < frameWidth && predBlkBottomRightY < frameHeight) {
-      windowPred[threadIdx.x] = currentframe[predBlkTopLeftY * frameWidth + predBlkTopLeftX];
+      window[numWindowElems + offset] = currentframe[predBlkTopLeftY * frameWidth + predBlkTopLeftX];
     }
     __syncthreads();
-
+//printf("%d  2   ",threadIdx.x);
 
     // TODO: Fix thread divergence.
     // Also make sure the indices are within actual window bounds (NOT hypotheticals).
@@ -106,9 +107,9 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
         candBlkTopLeftY <= currentBlk.bottom_right_y + extraSpan - currentBlk.height + 1) {
 
         result[threadIdx.x ] = computeMse(
-         currentframe, window, windowPred, currentBlk,
+         currentframe, window, currentBlk,
           candBlkTopLeftX, candBlkTopLeftY, frameWidth, hypoWindowWidth,
-          hypoWindowTopLeftX, hypoWindowTopLeftY
+          hypoWindowTopLeftX, hypoWindowTopLeftY, numWindowElems, numWindowpred
         );
     }
     __syncthreads();
@@ -220,7 +221,9 @@ int main(int argc, char* argv[]) {
     // Define grid of 32 x 32 threads.
     dim3 block(1024);
     dim3 grid((frameWidth + blkDim - 1) / blkDim, (frameHeight + blkDim - 1) / blkDim);
-
+  /*  int grid_dim1=(frameWidth + blkDim - 1) / blkDim;
+    int grid_dim2=(frameHeight + blkDim - 1) / blkDim);
+printf("dim     %d      %d",grid_dim1,grid_dim2);*/
     #ifdef DEBUG
     printf("GPU block size (search window dimension) = %d \n",extraSpan*2 + 1);
     printf("frameWidth = %d and frameHeight = %d\n",frameWidth,frameHeight );
@@ -229,7 +232,7 @@ int main(int argc, char* argv[]) {
     #endif
 
     // Invoke kernel.
-    f_findBestMatchBlock<<<grid, block, sharedmem * sizeof(int)>>>(d_currentDFrame, d_referenceFrame, extraSpan,d_block_list, frameWidth, frameHeight);
+    f_findBestMatchBlock<<<grid, block, sharedmem * sizeof(int)>>>(d_currentDFrame, d_referenceFrame, extraSpan,d_block_list, frameWidth, frameHeight, numWindowElems, numWindowpred);
     cudaDeviceSynchronize();
     double timeStampC = getTimeStamp() ;
 
