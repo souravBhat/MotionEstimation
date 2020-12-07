@@ -88,16 +88,19 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
     }
     __syncthreads();
 
-    if (predBlkX <= currentBlk.bottom_right_x && predBlkY <= currentBlk.bottom_right_y) {
+    if (predBlkX <= currentBlk.bottom_right_x && predBlkY <= currentBlk.bottom_right_y
+    ) {
       currentFrameBlk[threadIdx.x] = currentframe[predBlkY * frameWidth + predBlkX];
     }
     __syncthreads();
 
+
     // TODO: Fix thread divergence.
     // Also make sure the indices are within actual window bounds (NOT hypotheticals).
     if (candBlkTopLeftX >= 0 && candBlkBottomRightX <= frameWidth && candBlkTopLeftY >= 0 && candBlkBottomRightY <= frameHeight &&
-        candBlkTopLeftX <= currentBlk.bottom_right_x + extraSpan - currentBlk.width + 1 &&
-        candBlkTopLeftY <= currentBlk.bottom_right_y + extraSpan - currentBlk.height + 1) {
+        candBlkTopLeftX <= currentBlk.bottom_right_x  - currentBlk.width + 1 &&
+        candBlkTopLeftY <= currentBlk.bottom_right_y  - currentBlk.height + 1
+      ) {
 
         result[threadIdx.x ] = computeMse(
           window, currentFrameBlk, currentBlk,
