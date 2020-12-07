@@ -160,14 +160,8 @@ int main(int argc, char* argv[]) {
   // Difference between current and motion compensated frames.
   frameDiff(&outputFile[numElems*4], &outputFile[numElems*2], currentFrame, numElems);
 
-  // Compare MSE score with the motion compensated frame.
-  float motionCompScore = 0.0;
-  float originalScore = 0.0;
-  for(int i =0; i < numElems; i++) {
-    motionCompScore += (outputFile[numElems*2 + i] - currentFrame[i]) * (outputFile[numElems*2 + i]- currentFrame[i]);
-    originalScore += (currentFrame[i] - refFrame[i]) * (currentFrame[i] - refFrame[i]);
-  }
-  printf("Original Score: %.4f, Compensated Score: %.4f\n", originalScore/numElems, motionCompScore/numElems);
+  // Print PSNR.
+  printf("PSNR: %.6f\n", imagePSNR(&outputFile[numElems*2], currentFrame, frameWidth, frameHeight));
 
   // Output the frames of interest.
   printf("Output file dimensions: (%d x %d)\n", frameWidth, 5*frameHeight);
