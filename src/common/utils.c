@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/time.h>
+#include <math.h>
 #include "utils.h"
 
 
