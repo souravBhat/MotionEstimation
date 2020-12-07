@@ -74,7 +74,7 @@ fi
 count=0
 images="Foreman Jockey Beauty"
 imageTokens=( $images )
-metrics="totalTime CPU->GPU kernel GPU->CPU"
+metrics="totalTime CPU->GPU kernel GPU->CPU PSNR"
 metricTokens=( $metrics )
 epsilon=0.1
 
@@ -82,7 +82,7 @@ while read -r current && read -r previous <&3;do
 	currentVals=( $current )
 	previousVals=( $previous )
 	printf "Regression Testing: ${imageTokens[$count]}\n"
-	for i in {0..3};do
+	for i in {0..4};do
 		currentVal=${currentVals[$i]}
 		previousVal=${previousVals[$i]}
 		if (( $(echo "$currentVal > ($previousVal + $epsilon)" | bc -l) ));then

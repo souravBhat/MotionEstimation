@@ -193,7 +193,6 @@ int main(int argc, char* argv[]) {
     double timeStampD = getTimeStamp() ;
 
     //printf("the first block has motion vector x = %d, y = %d\n",result_block_list[0].motion_vectorX,result_block_list[0].motion_vectorY);
-    printf("%.6f %.6f %.6f %.6f\n",(timeStampD - timeStampA)*1000,(timeStampB - timeStampA)*1000, (timeStampC - timeStampB)*1000, (timeStampD - timeStampC)*1000 );
     p.blks = result_block_list;
 #ifdef DEBUG
     for (int i = 0; i < 396; i++){
@@ -212,6 +211,10 @@ int main(int argc, char* argv[]) {
     frameDiff(&outputFile[numElems*3], h_referenceFrame, h_currentFrame, numElems);
     // Difference between current and motion compensated frames.
     frameDiff(&outputFile[numElems*4], &outputFile[numElems*2], h_currentFrame, numElems);
+
+    float psnr = 0.0;
+    psnr = imagePSNR(&outputFile[numElems*2], h_currentFrame, frameWidth, frameHeight);
+    printf("%.6f %.6f %.6f %.6f %.6f\n",(timeStampD - timeStampA)*1000,(timeStampB - timeStampA)*1000, (timeStampC - timeStampB)*1000, (timeStampD - timeStampC)*1000, psnr );
 
     // Compare MSE score with the motion compensated frame.
     float motionCompScore = 0.0;
