@@ -77,6 +77,7 @@ imageTokens=( $images )
 metrics="totalTime CPU->GPU kernel GPU->CPU PSNR"
 metricTokens=( $metrics )
 epsilon=0.1
+PSRN_epsilon=0.5
 
 while read -r current && read -r previous <&3;do
 	currentVals=( $current )
@@ -85,8 +86,11 @@ while read -r current && read -r previous <&3;do
 	for i in {0..4};do
 		currentVal=${currentVals[$i]}
 		previousVal=${previousVals[$i]}
-		if (( $(echo "$currentVal > ($previousVal + $epsilon)" | bc -l) ));then
+		if [ $count -le 3 ] &&  (( $(echo "$currentVal > ($previousVal + $epsilon)" | bc -l) ));then
 			printf "  Worse for ${metricTokens[$i]}\tcurrent: $currentVal\tpreviousVal: $previousVal\n"
+		elif (( $(echo "$currentVal < ($previousVal - $PSRN_epsilon)" | bc -l) ));then
+			printf "  Worse for ${metricTokens[$i]}\tcurrent: $currentVal\tpreviousVal: $previousVal\n"
+
 		fi
 	done
 	count=$((count + 1))
