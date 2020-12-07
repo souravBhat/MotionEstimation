@@ -85,7 +85,7 @@ while read -r current && read -r previous <&3;do
 	for i in {0..4};do
 		currentVal=${currentVals[$i]}
 		previousVal=${previousVals[$i]}
-		if (( $(echo "$currentVal > ($previousVal + $epsilon)" | bc -l) ));then
+		if [ $i -le 3 ] &&  (( $(echo "$currentVal > ($previousVal + $epsilon)" | bc -l) ));then
 			printf "  Worse for ${metricTokens[$i]}\tcurrent: $currentVal\tpreviousVal: $previousVal\n"
 		fi
 	done
