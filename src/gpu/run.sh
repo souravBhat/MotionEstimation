@@ -37,10 +37,17 @@ previousVersion=0
 outputProgram=../../bin/gpu_v$version
 if $outputFrames ;then
 	nvcc -arch sm_52 ../common/utils.c ../common/block.c \
+<<<<<<< Updated upstream
 		../common/prediction_frame.c main_mse_shared.cu -DOUTPUT_FRAMES -o $outputProgram
 else
 	nvcc -arch sm_52 ../common/utils.c ../common/block.c \
 		../common/prediction_frame.c main_mse_shared.cu -o $outputProgram
+=======
+		../common/prediction_frame.c main_mse.cu -DOUTPUT_FRAMES -o $outputProgram
+else
+	nvcc -arch sm_52 ../common/utils.c ../common/block.c \
+		../common/prediction_frame.c main_mse.cu -o $outputProgram
+>>>>>>> Stashed changes
 fi
 
 resultsTxtPath=../../results/gpu/v${version}.txt
