@@ -11,16 +11,8 @@ extern "C"{
     #include "../common/prediction_frame.h"
 }
 
-// time stamp function in seconds
-double getTimeStamp() {
-    struct timeval tv ;
-    gettimeofday( &tv, NULL ) ;
-    return (double) tv.tv_usec/1000000 + tv.tv_sec ;
-}
-
 // Given candidate block and current frame block, compute mse.
 __device__ float computeMse(
-
   int* window,
   int* currentFrameBlk,
   block blk,
@@ -66,7 +58,6 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
     int hypoWindowBottomRightX = currentBlk.bottom_right_x + extraSpan;
     int hypoWindowWidth= hypoWindowBottomRightX - hypoWindowTopLeftX + 1;
 
-
     int currentFrameOffsetX = threadIdx.x % blkDim;
     int currentFrameOffsetY = threadIdx.x / blkDim;
     int predBlkX = currentBlk.top_left_x + currentFrameOffsetX;
@@ -88,19 +79,15 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
     }
     __syncthreads();
 
-    if (predBlkX <= currentBlk.bottom_right_x && predBlkY <= currentBlk.bottom_right_y
-    ) {
+    if (predBlkX <= currentBlk.bottom_right_x && predBlkY <= currentBlk.bottom_right_y) {
       currentFrameBlk[threadIdx.x] = currentframe[predBlkY * frameWidth + predBlkX];
     }
     __syncthreads();
-
-
     // TODO: Fix thread divergence.
     // Also make sure the indices are within actual window bounds (NOT hypotheticals).
     if (candBlkTopLeftX >= 0 && candBlkBottomRightX <= frameWidth && candBlkTopLeftY >= 0 && candBlkBottomRightY <= frameHeight &&
-        candBlkTopLeftX <= currentBlk.bottom_right_x  - currentBlk.width + 1 &&
-        candBlkTopLeftY <= currentBlk.bottom_right_y  - currentBlk.height + 1
-      ) {
+        candBlkTopLeftX <= currentBlk.bottom_right_x + extraSpan - currentBlk.width + 1 &&
+        candBlkTopLeftY <= currentBlk.bottom_right_y + extraSpan - currentBlk.height + 1) {
 
         result[threadIdx.x ] = computeMse(
           window, currentFrameBlk, currentBlk,
@@ -217,9 +204,7 @@ int main(int argc, char* argv[]) {
     // Define grid of 32 x 32 threads.
     dim3 block(1024);
     dim3 grid((frameWidth + blkDim - 1) / blkDim, (frameHeight + blkDim - 1) / blkDim);
-  /*  int grid_dim1=(frameWidth + blkDim - 1) / blkDim;
-    int grid_dim2=(frameHeight + blkDim - 1) / blkDim);
-printf("dim     %d      %d",grid_dim1,grid_dim2);*/
+
     #ifdef DEBUG
     printf("GPU block size (search window dimension) = %d \n",extraSpan*2 + 1);
     printf("frameWidth = %d and frameHeight = %d\n",frameWidth,frameHeight );
@@ -236,7 +221,7 @@ printf("dim     %d      %d",grid_dim1,grid_dim2);*/
 
     double timeStampD = getTimeStamp() ;
 
-    printf("%.6f %.6f %.6f %.6f\n",(timeStampD - timeStampA)*1000,(timeStampB - timeStampA)*1000, (timeStampC - timeStampB)*1000, (timeStampD - timeStampC)*1000 );
+
     p.blks = result_block_list;
 
     #ifdef DEBUG
@@ -258,7 +243,9 @@ printf("dim     %d      %d",grid_dim1,grid_dim2);*/
     frameDiff(&outputFile[numElems*3], h_referenceFrame, h_currentFrame, numElems);
     // Difference between current and motion compensated frames.
     frameDiff(&outputFile[numElems*4], &outputFile[numElems*2], h_currentFrame, numElems);
-
+    float psnr = 0.0;
+    psnr = imagePSNR(&outputFile[numElems*2], h_currentFrame, frameWidth, frameHeight);
+    printf("%.6f %.6f %.6f %.6f %.6f\n",(timeStampD - timeStampA)*1000,(timeStampB - timeStampA)*1000, (timeStampC - timeStampB)*1000, (timeStampD - timeStampC)*1000, psnr );
     #ifdef DEBUG
     #if (DEBUG > 0)
     // Compare MSE score with the motion compensated frame.

@@ -10,8 +10,8 @@ blkDim=8
 extraSpan=12
 showHelp=false
 while getopts ":v:b:s:gh" opt; do
-	case ${opt} in 
-	  v) version=$OPTARG;;	
+	case ${opt} in
+	  v) version=$OPTARG;;
 	  b) blkDim=$OPTARG;;
 	  s) extraSpan=$OPTARG;;
 	  g) outputFrames=true;;
@@ -26,7 +26,7 @@ if $showHelp;then
     -v : version of the code
     -b : blk dimension to run with
     -s : extra span to run with
-    -g : generate the output frames 
+    -g : generate the output frames
     -h : help\n\n"
     exit
 fi
@@ -37,10 +37,10 @@ previousVersion=0
 outputProgram=../../bin/gpu_v$version
 if $outputFrames ;then
 	nvcc -arch sm_52 ../common/utils.c ../common/block.c \
-		../common/prediction_frame.c main_mes.cu -DOUTPUT_FRAMES -o $outputProgram
+		../common/prediction_frame.c main_mse.cu -DOUTPUT_FRAMES -o $outputProgram
 else
 	nvcc -arch sm_52 ../common/utils.c ../common/block.c \
-		../common/prediction_frame.c main_mes.cu -o $outputProgram
+		../common/prediction_frame.c main_mse.cu -o $outputProgram
 fi
 
 resultsTxtPath=../../results/gpu/v${version}.txt
@@ -51,7 +51,7 @@ echo "Running on Foreman..."
 $outputProgram ../../frames/ForemanYF4.yuv ../../frames/ForemanYF1.yuv \
 	../../results/gpu/foreman_v${version}.yuv $blkDim $extraSpan 352 288 >> $resultsTxtPath
 
-echo "Running on Jockey..." 
+echo "Running on Jockey..."
 $outputProgram ../../frames/JockeyYF2.yuv ../../frames/JockeyYF1.yuv \
 	../../results/gpu/jockey_v${version}.yuv $blkDim $extraSpan 3840 2160 >> $resultsTxtPath
 
@@ -95,4 +95,3 @@ while read -r current && read -r previous <&3;do
 	done
 	count=$((count + 1))
 done < <(tail -n3 "${resultsDir}/v${version}.txt") 3< <(tail -n3 "${resultsDir}/v$previousVersion.txt")
-
