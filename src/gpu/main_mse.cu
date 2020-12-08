@@ -74,7 +74,7 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
     threadID[threadIdx.x] = threadIdx.x;
     result[threadIdx.x] = INT_MAX;
     // Copy the window values from the reference frame to the shared mem location.
-    if (candBlkTopLeftX >= 0 && candBlkTopLeftY >= 0 && candBlkBottomRightX < frameWidth && candBlkBottomRightY < frameHeight) {
+    if (candBlkTopLeftX >= 0 && candBlkTopLeftY >= 0 && candBlkTopLeftX < frameWidth && candBlkTopLeftY < frameHeight) {
       window[threadIdx.x] = referenceFrame[candBlkTopLeftY * frameWidth + candBlkTopLeftX];
     }
     __syncthreads();
@@ -85,9 +85,9 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
     __syncthreads();
     // TODO: Fix thread divergence.
     // Also make sure the indices are within actual window bounds (NOT hypotheticals).
-    if (candBlkTopLeftX >= 0 && candBlkBottomRightX <= frameWidth && candBlkTopLeftY >= 0 && candBlkBottomRightY <= frameHeight &&
-        candBlkTopLeftX <= currentBlk.bottom_right_x + extraSpan - currentBlk.width + 1 &&
-        candBlkTopLeftY <= currentBlk.bottom_right_y + extraSpan - currentBlk.height + 1) {
+    if (candBlkTopLeftX >= 0 && candBlkBottomRightX < frameWidth && candBlkTopLeftY >= 0 && candBlkBottomRightY < frameHeight &&
+            candBlkBottomRightX <= currentBlk.bottom_right_x + extraSpan &&
+            candBlkBottomRightY <= currentBlk.bottom_right_y + extraSpan) {
 
         result[threadIdx.x ] = computeMse(
           window, currentFrameBlk, currentBlk,
@@ -99,15 +99,19 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
 
     // Calculating the minimum value in result array.
     unsigned int i = (nuBlocksWithinGPUGrid + 1) / 2;
-    while (i != 0) {
-        if (threadIdx.x  < i && threadIdx.x + i < nuBlocksWithinGPUGrid) {
-            if (result[threadIdx.x] > result[threadIdx.x + i]) {
-                result[threadIdx.x] = result[threadIdx.x + i];
-                threadID[threadIdx.x] = threadID[threadIdx.x + i];
+    int outerLimit = nuBlocksWithinGPUGrid;
+    while (i != outerLimit) {
+        int thisElem = threadIdx.x;
+        int stepElem = threadIdx.x + i;
+        if (thisElem  < i && stepElem < outerLimit) {
+            if (result[thisElem] > result[stepElem]) {
+                result[thisElem] = result[stepElem];
+                threadID[thisElem] = threadID[stepElem];
             }
         }
         __syncthreads();
-        i /= 2;
+        outerLimit = i;
+        i = (i + 1)/2;
     }
     __syncthreads();
 
@@ -122,6 +126,7 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
     if (threadIdx.x == threadID[0]) {
         block_list[blockID].motion_vectorX = candBlkTopLeftX - currentBlk.top_left_x;
         block_list[blockID].motion_vectorY = candBlkTopLeftY - currentBlk.top_left_y;
+        block_list[blockID].is_best_match_found = 1;
         #ifdef DEBUG
         #if (DEBUG > 1)
         printf("the %d block has motion vector x = %d, y = %d\n", blockID, block_list[blockID].motion_vectorX,

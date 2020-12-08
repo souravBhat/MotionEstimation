@@ -102,12 +102,15 @@ void frameDiff(int* diffFrame, int* frameA, int* frameB, int numElems) {
 void motionCompensatedFrame(int* motionCompFrame, predictionFrame pf, int* ref_frame) {
   for(int i = 0; i < pf.num_blks; i++) {
       block blk = pf.blks[i];
-      if(!blk.is_best_match_found) continue;
+      if(blk.is_best_match_found != 1) {
+        printf("Error: Trying to create compensation frame without best match, value = %d for block %d\n", blk.is_best_match_found, i);
+        exit(0);
+      }
 
       int currFrameTopLeftX = blk.top_left_x;
       int currFrameTopLeftY = blk.top_left_y;
       int compFrameTopLeftX = currFrameTopLeftX + blk.motion_vectorX;
-      int compFrameTopRightY = currFrameTopLeftY + blk.motion_vectorY;
+      int compFrameTopLeftY = currFrameTopLeftY + blk.motion_vectorY;
       // Populate the compensated frame.
       for(int offsetX = 0;  offsetX < blk.width; offsetX++) {
         for(int offsetY = 0; offsetY < blk.height; offsetY++) {
@@ -115,7 +118,7 @@ void motionCompensatedFrame(int* motionCompFrame, predictionFrame pf, int* ref_f
           int currX = currFrameTopLeftX + offsetX;
           int currY = currFrameTopLeftY + offsetY;
           int compX = compFrameTopLeftX + offsetX;
-          int compY = compFrameTopRightY + offsetY;
+          int compY = compFrameTopLeftY + offsetY;
           // Populate array if within bounds.
           if(compX >= 0 && compY >= 0 && compX < pf.width && compY < pf.height) {
             #ifdef DEBUG
