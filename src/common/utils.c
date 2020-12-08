@@ -102,7 +102,10 @@ void frameDiff(int* diffFrame, int* frameA, int* frameB, int numElems) {
 void motionCompensatedFrame(int* motionCompFrame, predictionFrame pf, int* ref_frame) {
   for(int i = 0; i < pf.num_blks; i++) {
       block blk = pf.blks[i];
-      if(!blk.is_best_match_found) continue;
+      if(blk.is_best_match_found != 1) {
+        printf("Error: Trying to create compensation frame without best match, value = %d for block %d\n", blk.is_best_match_found, i);
+        exit(0);
+      }
 
       int currFrameTopLeftX = blk.top_left_x;
       int currFrameTopLeftY = blk.top_left_y;
