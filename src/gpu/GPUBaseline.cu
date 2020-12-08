@@ -67,21 +67,23 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceframe,int 
     unsigned int i = (nuBlocksWithinGPUGrid + 1) / 2;
     //printf("ID = %d, i = %d, nuBlocksWithinGPUGrid = %d\n", threadIdx.x + blockDim.x * threadIdx.y , i , nuBlocksWithinGPUGrid);
 
-    while (i != 0) {
+    int outerLimit = nuBlocksWithinGPUGrid;
+    while (i != outerLimit) {
 //            if (threadIdx.x + threadIdx.y * blockDim.x < i &&
 //                threadIdx.x + threadIdx.y * blockDim.x + i < nuBlocksWithinGPUGrid) {
-        if (threadIdx.x + threadIdx.y * blockDim.x < i &&
-            threadIdx.x + threadIdx.y * blockDim.x + i < nuBlocksWithinGPUGrid) {
-            //printf("comparing %lf to %lf \n",result[threadIdx.x + threadIdx.y*blockDim.x],result[threadIdx.x + threadIdx.y*blockDim.x + i]);
-            if (result[threadIdx.x + threadIdx.y * blockDim.x] >
-                result[threadIdx.x + threadIdx.y * blockDim.x + i]) {
-                result[threadIdx.x + threadIdx.y * blockDim.x] = result[threadIdx.x + threadIdx.y * blockDim.x + i];
-                threadID[threadIdx.x + threadIdx.y * blockDim.x] = threadID[threadIdx.x + threadIdx.y * blockDim.x +
-                                                                            i];
+
+        int thisElem = threadIdx.x + threadIdx.y*blockDim.x;
+        int stepElem = threadIdx.x + threadIdx.y*blockDim.x + i;
+
+        if (thisElem < i && stepElem < outerLimit) {
+            if (result[thisElem] > result[stepElem]) {
+                result[thisElem] = result[stepElem];
+                threadID[thisElem] = threadID[stepElem];
             }
         }
         __syncthreads();
-        i /= 2;
+        outerLimit = i;
+        i = (i + 1)/2;
     }
 
     /* print out the best one result*/
@@ -97,6 +99,7 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceframe,int 
 
         block_list[blockID].motion_vectorX = candidateBlcokTopLeftX - currentBlk.top_left_x;
         block_list[blockID].motion_vectorY = candidateBlcokTopLeftY - currentBlk.top_left_y;
+        block_list[blockID].is_best_match_found = 1;
         //printf("the  block has candidateBlcokTopLeftX = %d and currentBlk.top_left_x = %d and  motion vector x = %d\n",candidateBlcokTopLeftX, currentBlk.top_left_x, block_list[blockID].motion_vectorX);
 #ifdef DEBUG
         printf("the %d block has motion vector x = %d, y = %d\n", blockID, block_list[blockID].motion_vectorX,
