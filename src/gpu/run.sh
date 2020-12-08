@@ -88,9 +88,8 @@ while read -r current && read -r previous <&3;do
 		previousVal=${previousVals[$i]}
 		if [ $i -le 3 ] &&  (( $(echo "$currentVal > ($previousVal + $epsilon)" | bc -l) ));then
 			printf "  Worse for ${metricTokens[$i]}\tcurrent: $currentVal\tpreviousVal: $previousVal\n"
-		elif (( $(echo "$currentVal < ($previousVal - $PSRN_epsilon)" | bc -l) ));then
+		elif [ $i -eq 4 ] && (( $(echo "$currentVal < ($previousVal - $PSRN_epsilon)" | bc -l) ));then
 			printf "  Worse for ${metricTokens[$i]}\tcurrent: $currentVal\tpreviousVal: $previousVal\n"
-
 		fi
 	done
 	count=$((count + 1))
