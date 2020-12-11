@@ -4,7 +4,10 @@
 #include "../common/block.h"
 #include "../common/prediction_frame.h"
 #include "../common/utils.h"
+#include "thpool.h"
 
+pthread_mutex_t locked;
+int flag = 0;
 void populateBlkMotionVector(block *blk, int dx, int dy) {
   blk->motion_vectorX = dx;
   blk->motion_vectorY = dy;
@@ -95,11 +98,12 @@ void createRunConfig(runConfig* config, predictionFrame* p, int* refFrame, block
 }
 
 // Method called by the pthreads.
-void *runFindBestBlkMse(void* args) {
-  runConfig* config = (runConfig*) args;
+void runFindBestBlkMse(void* args) {
+    runConfig* config = (runConfig*) args;
+    //printf("extraSpan = %d\n", config->extraSpan);
   int val = findBestBlkMse(*config->p, config->refFrame, config->blk, config->extraSpan);
   config->score = val;
-  pthread_exit(0);
+  //pthread_exit(0);
 }
 
 int main(int argc, char* argv[]) {
@@ -110,10 +114,10 @@ int main(int argc, char* argv[]) {
   char * currentFrameStr = argv[1];
   char * referenceFrameStr = argv[2];
   char * outputDir = argv[3];
-  int blkDim = argc > 4 ? atoi(argv[4]) : 16;
-  int extraSpan = argc > 5 ? atoi(argv[5]) : 7;
-  int frameWidth =  argc > 6 ? atoi(argv[6]) : 3840;
-  int frameHeight = argc > 7 ? atoi(argv[7]) : 2160;
+  int blkDim = argc > 4 ? atoi(argv[4]) : 8;
+  int extraSpan = argc > 5 ? atoi(argv[5]) : 12;
+  int frameWidth =  argc > 6 ? atoi(argv[6]) : 352;
+  int frameHeight = argc > 7 ? atoi(argv[7]) : 288;
   printf("[\n  Current Frame: %s\n  Reference Frame: %s\n  Output Dir: %s\n  BlkDim: %d\n  ExtraSpan: %d\n  FrameWidth: %d\n  FrameHeight: %d\n]\n",
     currentFrameStr, referenceFrameStr, outputDir, blkDim, extraSpan, frameWidth, frameHeight);
 
@@ -137,18 +141,30 @@ int main(int argc, char* argv[]) {
   // Generate prediction frame, truncate into blocks and find best match mse block.
   predictionFrame p;
   createPredictionFrame(&p, currentFrame, frameWidth, frameHeight, blkDim);
-  pthread_t tids[p.num_blks];
+  //pthread_t tids[p.num_blks];
+    //printf("initialize worker pool\n");
+  threadpool thpool = thpool_init(1);
+    //printf("pause worker pool\n");
 
-  double timeStampA = getTimeStamp();
+    thpool_pause(thpool);
+
+    //printf("adding workers\n");
   for(int i = 0; i < p.num_blks; i++) {
+
     runConfig *config = (runConfig*)malloc(sizeof(runConfig));
     createRunConfig(config, &p, refFrame, &p.blks[i], extraSpan);
-    pthread_create(&tids[i], NULL, runFindBestBlkMse, config);
+    //pthread_create(&tids[i], NULL, runFindBestBlkMse, config);
+    thpool_add_work(thpool, runFindBestBlkMse, config);
   }
 
+  double timeStampA = getTimeStamp();
+  //printf("resuming the workers\n");
+  thpool_resume(thpool);
   // Wait for threads to complete.
-  for(int i = 0; i < p.num_blks; i++) pthread_join(tids[i], NULL);
+  //for(int i = 0; i < p.num_blks; i++) pthread_join(tids[i], NULL);
+  thpool_wait(thpool);
   double timeStampB = getTimeStamp();
+  thpool_destroy(thpool);
 
   // Generate motion compensated frame and other results.
   int* outputFile = (int*) malloc(bytes * 5);
@@ -167,4 +183,6 @@ int main(int argc, char* argv[]) {
   printf("Output file dimensions: (%d x %d)\n", frameWidth, 5*frameHeight);
   yuvWriteFrame(outputFileName, outputFile, numElems*5);
   printf("Computation time: %.lf ms\n", (timeStampB - timeStampA)*1000);
+  double psnr = imagePSNR(&outputFile[numElems*2], currentFrame, frameWidth, frameHeight);
+  printf("PSNR: %.lf \n", psnr);
 }
