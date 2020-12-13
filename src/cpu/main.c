@@ -141,27 +141,18 @@ int main(int argc, char* argv[]) {
   // Generate prediction frame, truncate into blocks and find best match mse block.
   predictionFrame p;
   createPredictionFrame(&p, currentFrame, frameWidth, frameHeight, blkDim);
-  //pthread_t tids[p.num_blks];
-    //printf("initialize worker pool\n");
-  threadpool thpool = thpool_init(1);
-    //printf("pause worker pool\n");
-
-    thpool_pause(thpool);
-
-    //printf("adding workers\n");
+  threadpool thpool = thpool_init(100);
+  runConfig* configs[p.num_blks];
   for(int i = 0; i < p.num_blks; i++) {
-
     runConfig *config = (runConfig*)malloc(sizeof(runConfig));
     createRunConfig(config, &p, refFrame, &p.blks[i], extraSpan);
-    //pthread_create(&tids[i], NULL, runFindBestBlkMse, config);
-    thpool_add_work(thpool, runFindBestBlkMse, config);
+    configs[i] = config;
+  }
+  double timeStampA = getTimeStamp();
+  for(int i = 0; i < p.num_blks; i++) {
+    thpool_add_work(thpool, runFindBestBlkMse, configs[i]);
   }
 
-  double timeStampA = getTimeStamp();
-  //printf("resuming the workers\n");
-  thpool_resume(thpool);
-  // Wait for threads to complete.
-  //for(int i = 0; i < p.num_blks; i++) pthread_join(tids[i], NULL);
   thpool_wait(thpool);
   double timeStampB = getTimeStamp();
   thpool_destroy(thpool);
