@@ -123,10 +123,10 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
       float resultVal = result[tid];
       int threadVal = threadID[tid];
       for (int offset = 16; offset > 0; offset /= 2) {
-        float compVal = __shfl_down_sync(mask, resultVal, offset);
+        float compResultVal = __shfl_down_sync(mask, resultVal, offset);
         float compThreadVal = __shfl_down_sync(mask, threadVal, offset);
-        if (resultVal > compVal) {
-          resultVal = compVal;
+        if (resultVal > compResultVal) {
+          resultVal = compResultVal;
           threadVal = compThreadVal;
         }
       }
