@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <limits.h>
+#define FULL_MASK 0xffffffff
 
 extern "C"{
     #include "../common/utils.h"
@@ -43,6 +44,7 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
     block currentBlk = block_list[blockID];
 
     /* computing the candidate block location by using thread ID*/
+    int tid = threadIdx.x;
     int tidX = threadIdx.x % 32;
     int tidY = threadIdx.x / 32;
     int candBlkTopLeftX = currentBlk.top_left_x - extraSpan + tidX;
@@ -100,7 +102,7 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
     // Calculating the minimum value in result array.
     unsigned int i = (nuBlocksWithinGPUGrid + 1) / 2;
     int outerLimit = nuBlocksWithinGPUGrid;
-    while (i != outerLimit) {
+    while (i != outerLimit && outerLimit >= 32) {
         int thisElem = threadIdx.x;
         int stepElem = threadIdx.x + i;
         if (thisElem  < i && stepElem < outerLimit) {
@@ -115,6 +117,25 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
     }
     __syncthreads();
 
+    // Use warp level primitives to reduce the last 32 elements of the array.
+    unsigned mask = __ballot_sync(FULL_MASK, tid < 32);
+    if (tid < 32) {
+      float resultVal = result[tid];
+      int threadVal = threadID[tid];
+      for (int offset = 16; offset > 0; offset /= 2) {
+        float compVal = __shfl_down_sync(mask, resultVal, offset);
+        float compThreadVal = __shfl_down_sync(mask, threadVal, offset);
+        if (resultVal > compVal) {
+          resultVal = compVal;
+          threadVal = compThreadVal;
+        }
+      }
+      if(tid == 0) {
+        result[0] = resultVal;
+        threadID[0] = threadVal;
+      }
+    }
+    __syncthreads();
     #ifdef DEBUG
     // Print out the best one result.
     if(threadIdx.x == 0){
@@ -123,7 +144,7 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
     #endif
 
     // Compute the motion vector. The thread computed the minimum score is at index 0 of threadID.
-    if (threadIdx.x == threadID[0]) {
+    if (tid == threadID[0]) {
         block_list[blockID].motion_vectorX = candBlkTopLeftX - currentBlk.top_left_x;
         block_list[blockID].motion_vectorY = candBlkTopLeftY - currentBlk.top_left_y;
         block_list[blockID].is_best_match_found = 1;
@@ -135,7 +156,6 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
         #endif
 
     }
-    __syncthreads();
 }
 
 
