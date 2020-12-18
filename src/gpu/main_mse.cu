@@ -130,31 +130,13 @@ __global__ void f_findBestMatchBlock(int *currentframe, int *referenceFrame,int 
           threadVal = compThreadVal;
         }
       }
+      // Thread 0 will have the minimum value and the threadVal corresponding to it.
+      // The motion vectors can be calculated using the threadVal.
       if(tid == 0) {
-        result[0] = resultVal;
-        threadID[0] = threadVal;
-      }
-    }
-    __syncthreads();
-    #ifdef DEBUG
-    // Print out the best one result.
-    if(threadIdx.x == 0){
-        //printf("smallest MSE = %lf with thread ID = %d\n",result[0], threadID[0]);
-    }
-    #endif
-
-    // Compute the motion vector. The thread computed the minimum score is at index 0 of threadID.
-    if (tid == threadID[0]) {
-        block_list[blockID].motion_vectorX = candBlkTopLeftX - currentBlk.top_left_x;
-        block_list[blockID].motion_vectorY = candBlkTopLeftY - currentBlk.top_left_y;
+        block_list[blockID].motion_vectorX = candBlkTopLeftX - currentBlk.top_left_x + threadVal % 32;
+        block_list[blockID].motion_vectorY = candBlkTopLeftY - currentBlk.top_left_y + threadVal / 32;
         block_list[blockID].is_best_match_found = 1;
-        #ifdef DEBUG
-        #if (DEBUG > 1)
-        printf("the %d block has motion vector x = %d, y = %d\n", blockID, block_list[blockID].motion_vectorX,
-               block_list[blockID].motion_vectorY);
-        #endif
-        #endif
-
+      }
     }
 }
 
