@@ -1,0 +1,13 @@
+[
+  Current Frame: ../../frames/JockeyYF2.yuv
+  Reference Frame: ../../frames/JockeyYF1.yuv
+  Output Dir: ../../results/cpu/jockey
+  BlkDim: 8
+  ExtraSpan: 12
+  FrameWidth: 3840
+  FrameHeight: 2160
+]
+PSNR: 27.321059
+Output file dimensions: (3840 x 10800)
+Computation time: 2418 ms
+PSNR: 27 
