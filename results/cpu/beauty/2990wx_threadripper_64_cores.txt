@@ -9,5 +9,5 @@
 ]
 PSNR: 32.824973
 Output file dimensions: (3840 x 10800)
-Computation time: 2427 ms
+Computation time: 2350 ms
 PSNR: 33 
