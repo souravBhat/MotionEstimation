@@ -1,0 +1,13 @@
+[
+  Current Frame: ../../frames/BeautyYF2.yuv
+  Reference Frame: ../../frames/BeautyYF1.yuv
+  Output Dir: ../../results/cpu/beauty
+  BlkDim: 8
+  ExtraSpan: 12
+  FrameWidth: 3840
+  FrameHeight: 2160
+]
+PSNR: 32.824973
+Output file dimensions: (3840 x 10800)
+Computation time: 2350 ms
+PSNR: 33 

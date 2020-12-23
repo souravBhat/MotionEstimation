@@ -1,0 +1,13 @@
+[
+  Current Frame: ../../frames/ForemanYF4.yuv
+  Reference Frame: ../../frames/ForemanYF1.yuv
+  Output Dir: ../../results/cpu/foreman
+  BlkDim: 8
+  ExtraSpan: 12
+  FrameWidth: 352
+  FrameHeight: 288
+]
+PSNR: 31.816000
+Output file dimensions: (352 x 1440)
+Computation time: 41 ms
+PSNR: 32 
